@@ -1,47 +1,51 @@
-/* syscall.c : syscalls
- */
-
 #include <xeroskernel.h>
 #include <stdarg.h>
 
+int syscall(int call, ...) {
+	va_list args;
+	va_start(args, call);
+ 	// set random value to check if functional
+	int retVal = 999;
 
-int syscall( int req, ... ) {
-/**********************************/
+	__asm__ (
+		"movl %1, %%eax;"
+		"movl %2, %%edx;"
+		"int %3;"
+		"movl %%eax, %0;"
+		: "=g" (retVal)
+		: "g" (call), "g" (args), "i" (INTERRUPT_NUM)
+		: "eax", "edx");
 
-    va_list     ap;
-    int         rc;
-
-    va_start( ap, req );
-
-    __asm __volatile( " \
-        movl %1, %%eax \n\
-        movl %2, %%edx \n\
-        int  %3 \n\
-        movl %%eax, %0 \n\
-        "
-        : "=g" (rc)
-        : "g" (req), "g" (ap), "i" (KERNEL_INT)
-        : "%eax" 
-    );
- 
-    va_end( ap );
-
-    return( rc );
+	if (retVal == 999) {
+		kprintf("FAILURE: return value was not set correctly");
+	}
+	return retVal;
 }
 
-unsigned int syscreate( funcptr fp, size_t stack ) {
-/*********************************************/
-
-    return( syscall( SYS_CREATE, fp, stack ) );
+/**
+* Gets the PID of a newly created process.
+* Returns NULL if no process's available.
+*/
+static int getPID(void) {
+    PCB *curr = readyQueue;
+    while (curr) {
+        if (curr->next == NULL) {
+            return curr->pid;
+        }
+        curr = curr->next;
+    }
+    return NULL;
 }
 
-void sysyield( void ) {
-/***************************/
-  syscall( SYS_YIELD );
+unsigned int syscreate(functionPointer func, int stack) {
+    syscall(CREATE, func, stack);
+    return getPID();
 }
 
- void sysstop( void ) {
-/**************************/
+void sysyield(void) {
+	syscall(YIELD);
+}
 
-   syscall( SYS_STOP );
+void sysstop(void) {
+	syscall(STOP);
 }

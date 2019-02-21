@@ -1,88 +1,76 @@
-/* disp.c : dispatcher
- */
-
 #include <xeroskernel.h>
-#include <xeroslib.h>
 #include <stdarg.h>
 
-
-static pcb      *head = NULL;
-static pcb      *tail = NULL;
-
-void     dispatch( void ) {
-/********************************/
-
-    pcb         *p;
-    int         r;
-    funcptr     fp;
-    int         stack;
-    va_list     ap;
-
-    for( p = next(); p; ) {
-      //      kprintf("Process %x selected stck %x\n", p, p->esp);
-
-      r = contextswitch( p );
-      switch( r ) {
-      case( SYS_CREATE ):
-        ap = (va_list)p->args;
-        fp = (funcptr)(va_arg( ap, int ) );
-        stack = va_arg( ap, int );
-	p->ret = create( fp, stack );
-        break;
-      case( SYS_YIELD ):
-        ready( p );
-        p = next();
-        break;
-      case( SYS_STOP ):
-        p->state = STATE_STOPPED;
-        p = next();
-        break;
-      default:
-        kprintf( "Bad Sys request %d, pid = %u\n", r, p->pid );
-      }
-    }
-
-    kprintf( "Out of processes: dying\n" );
-    
-    for( ;; );
+void addToStoppedQueue(PCB *pcb) {
+	PCB *prevFront = stoppedQueue;
+	stoppedQueue = (PCB*) pcb;
+	stoppedQueue->next = prevFront;
 }
 
-extern void dispatchinit( void ) {
-/********************************/
-
-  //bzero( proctab, sizeof( pcb ) * MAX_PROC );
-  memset(proctab, 0, sizeof( pcb ) * MAX_PROC);
+/**
+* Cleans up a process by freeing its allocated stack and putting the process on the stopped queue.
+*/
+void cleanup(PCB *pcb) {
+	kfree((void*) pcb->originalSp); // we don't know esp is pointing to the low address of stack; it might've been incremented since being allocated
+	pcb->esp = NULL;
+	addToStoppedQueue(pcb);
 }
 
-extern void     ready( pcb *p ) {
-/*******************************/
-
-    p->next = NULL;
-    p->state = STATE_READY;
-
-    if( tail ) {
-        tail->next = p;
-    } else {
-        head = p;
-    }
-
-    tail = p;
+/**
+* Removes the next process from the ready queue and returns a pointer to its process control block
+*/
+PCB* next(void) {
+	PCB *pop = (PCB*) readyQueue;
+	if (pop != NULL) {
+		readyQueue = (PCB*) pop->next;
+	}
+	return pop;
 }
 
-extern pcb      *next( void ) {
-/*****************************/
-
-    pcb *p;
-
-    p = head;
-
-    if( p ) {
-        head = p->next;
-        if( !head ) {
-            tail = NULL;
-        }
-    }
-
-    return( p );
+/**
+* Takes a pointer to a process control block and adds it to the back of the ready queue
+*/
+void ready(PCB *pcb) {
+	if (!readyQueue) {
+		readyQueue = pcb;
+		pcb->next = NULL;
+		return;
+	}
+	PCB *curr = readyQueue;
+	while (curr != NULL) {
+		if (curr->next == NULL) {
+			curr->next = pcb;
+			pcb->next = NULL;
+			return;
+		}
+		curr = (PCB*) curr->next;
+	}
 }
 
+void dispatch() {
+	PCB* process = next();
+	for (;;) {
+		int contextAddress = contextswitch(process);
+		context_frame *context = (context_frame*) contextAddress;
+		REQUEST_TYPE call = (REQUEST_TYPE) ((REQUEST_TYPE) context->eax);
+		switch(call) {
+			case CREATE: {
+				va_list params = ((va_list) (*context).edx);
+				functionPointer func = va_arg(params, functionPointer);
+				int stackSize = (int) va_arg(params, int);
+				create(func, stackSize);
+				break;
+			}
+			case YIELD: {
+				ready(process);
+				process = next();
+				break;
+			}
+			case STOP: {
+				cleanup(process);
+				process = next();
+				break;
+			}
+		}
+	}
+}

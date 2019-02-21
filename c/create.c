@@ -1,81 +1,65 @@
-/* create.c : create a process
- */
-
 #include <xeroskernel.h>
-#include <xeroslib.h>
 
-pcb     proctab[MAX_PROC];
+#define SAFETY_MARGIN 16
 
-/* make sure interrupts are armed later on in the kernel development  */
-#define STARTING_EFLAGS         0x00003000
+/**
+* Pop the first unused PCB from the stopped queue.
+* Returns NULL if no free process control blocks.
+*/
+PCB* getPCB(void) {
+	PCB *createdProcess = stoppedQueue;
+	if (createdProcess != NULL) {
+		stoppedQueue = stoppedQueue->next;
+		return createdProcess;
+	}
+	return NULL;
+}
 
-// PIDs can't start at 0 nor can they be negative
-static PID_t      nextpid = 1;
+/**
+* Adds a PCB block to the tail of the ready queue.
+*/
+int addReady(char* stackAddress, void* originalSP) {
+	PCB *newProcess = getPCB();
+	if (!newProcess) return 0;
+	newProcess->esp = (unsigned long) stackAddress;
+	newProcess->originalSp = (unsigned long) originalSP;
+	if (!readyQueue) readyQueue = newProcess;
+	else {
+		PCB *curr = readyQueue;
+		while (curr) {
+			if (!curr->next) {
+				curr->next = newProcess;
+				newProcess->next = NULL;
+				return 1;
+			}
+			curr = curr->next;
+		}
+	}
+	return 0;
+}
 
+/**
+* Initialize the initial context of a process's stack.
+*/
+void initContext(functionPointer func, char *stackAddress) {
+	context_frame context = { 0 };
 
+	context.ebp = (unsigned long) stackAddress;
+	context.esp = (unsigned long) stackAddress;
+	context.ret_eip = (unsigned long) func;
+	context.iret_cs = getCS();
+	context.eflags = 0x00003000;
 
-int create( funcptr fp, size_t stackSize ) {
-/***********************************************/
+	*((context_frame*) stackAddress) = context;
+}
 
-    context_frame       *cf;
-    pcb                 *p = NULL;
-    int                 i;
-
-
-    /* If the PID becomes 0 it  has wrapped.
-     * This means that the next PID we handout could be
-     * in use. To find such a free number we have to propose a 
-     * new PID and then scan to see if it is in the table. If it 
-     * is then we have to try again. 
-     */
-
-
-    if (nextpid == 0) 
-      return CREATE_FAILURE;
-
-    // If the stack is too small make it larger
-    if( stackSize < PROC_STACK ) {
-        stackSize = PROC_STACK;
-    }
-
-    for( i = 0; i < MAX_PROC; i++ ) {
-        if( proctab[i].state == STATE_STOPPED ) {
-            p = &proctab[i];
-            break;
-        }
-    }
-    
-    //    Some stuff to help wih debugging
-    //    char buf[100];
-    //    sprintf(buf, "Slot %d empty\n", i);
-    //    kprintf(buf);
-    //    kprintf("Slot %d empty\n", i);
-    
-    if( !p ) {
-        return CREATE_FAILURE;
-    }
-
-
-    cf = kmalloc( stackSize );
-    if( !cf ) {
-        return CREATE_FAILURE;
-    }
-
-    cf = (context_frame *)((unsigned char *)cf + stackSize - 4);
-    cf--;
-
-    memset(cf, 0xA5, sizeof( context_frame ));
-
-    cf->iret_cs = getCS();
-    cf->iret_eip = (unsigned int)fp;
-    cf->eflags = STARTING_EFLAGS;
-
-    cf->esp = (int)(cf + 1);
-    cf->ebp = cf->esp;
-    p->esp = (unsigned long*)cf;
-    p->state = STATE_READY;
-    p->pid = nextpid++;
-
-    ready( p );
-    return p->pid;
+/**
+* Create a new process.
+* Returns 0 if no process control blocks are available, and 1 otherwise.
+*/
+int create(functionPointer func, int stack) {
+	void *sp = kmalloc(stack);
+	char *stackAddress = (char*) sp + stack - sizeof(context_frame) - SAFETY_MARGIN;
+	initContext(func, stackAddress);
+	return addReady(stackAddress, sp);
 }

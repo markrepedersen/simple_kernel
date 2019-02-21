@@ -3,47 +3,30 @@
 
 #include <xeroskernel.h>
 
-/* Your code goes here */
- void producer( void ) {
-/****************************/
-
-    int         i;
-
-    for( i = 0; i < 5; i++ ) {
-        kprintf( "Produce %d\n", i );
+void consume(void) {
+    for(int i = 0; i < 15; i++) {
+        kprintf("everyone!\n");
         sysyield();
     }
-
     sysstop();
 }
 
- void consumer( void ) {
-/****************************/
-
-    int         i;
-
-    for( i = 0; i < 5; i++ ) {
-        kprintf( "Consume %d \n", i );
+void produce(void) {
+    for(int i = 0; i < 15; i++) {
+        kprintf("Happy 2019 ");
         sysyield();
     }
-
     sysstop();
 }
 
- void     root( void ) {
-/****************************/
-   PID_t proc_pid, con_pid;
-   
-   kprintf("Root has been called\n");
-   
-   sysyield();
-   sysyield();
-   proc_pid = syscreate( &producer, 4096 );
-   con_pid =  syscreate( &consumer, 4096 );
-
-   kprintf("Proc pid = %u Con pid = %u\n", proc_pid, con_pid);
-
-   for( ;; ) {
-     sysyield();
-   }
- }
+void root(void) {
+    kprintf("Hello world!\n");
+    kprintf("creating produce: 0x%x\n", &produce);
+    syscreate(&produce, 1024);
+    kprintf("creating consume: 0x%x\n", &consume);
+    syscreate(&consume, 1024);
+    for (;;) {
+        // kprintf("root yielding\n");
+        sysyield();
+    }
+}
