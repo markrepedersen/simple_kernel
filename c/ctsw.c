@@ -10,6 +10,7 @@
 void _ISREntryPoint(void);
 static void *k_stack;
 static unsigned long *ESP;
+static int rc;
 
 /**
 * Add handler to exception table.
@@ -21,12 +22,14 @@ void initEvec() {
 
 int contextswitch(PCB *p) {
 	ESP = (unsigned long*) p->esp;
+	rc = p->ret;
 	__asm __volatile (
         "pushf;" /* store flags */
         "pusha;" /* store all registers */
-		"movl %%esp, k_stack;"
-		"movl ESP, %%esp;"
-		"popa;"
+		"movl %%esp, k_stack;" // save kernel stack
+		"movl ESP, %%esp;"  // restore process' stack
+		"popa;" // restore process' registers
+		"movl rc, %%eax;" // return system call result
 		"iret;"
 		"_ISREntryPoint:"
 		"pusha;"

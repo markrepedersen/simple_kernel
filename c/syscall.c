@@ -4,10 +4,9 @@
 int syscall(int call, ...) {
 	va_list args;
 	va_start(args, call);
- 	// set random value to check if functional
-	int retVal = 999;
+	int retVal;
 
-	__asm__ (
+	__asm__ __volatile (
 		"movl %1, %%eax;"
 		"movl %2, %%edx;"
 		"int %3;"
@@ -16,30 +15,11 @@ int syscall(int call, ...) {
 		: "g" (call), "g" (args), "i" (INTERRUPT_NUM)
 		: "eax", "edx");
 
-	if (retVal == 999) {
-		kprintf("FAILURE: return value was not set correctly");
-	}
 	return retVal;
 }
 
-/**
-* Gets the PID of a newly created process.
-* Returns NULL if no process's available.
-*/
-static int getPID(void) {
-    PCB *curr = readyQueue;
-    while (curr) {
-        if (curr->next == NULL) {
-            return curr->pid;
-        }
-        curr = curr->next;
-    }
-    return NULL;
-}
-
 unsigned int syscreate(functionPointer func, int stack) {
-    syscall(CREATE, func, stack);
-    return getPID();
+    return syscall(CREATE, func, stack);
 }
 
 void sysyield(void) {
@@ -48,4 +28,20 @@ void sysyield(void) {
 
 void sysstop(void) {
 	syscall(STOP);
+}
+
+PID_t sysgetpid(void) {
+	return syscall(GET_PID);
+}
+
+void sysputs(char* str) {
+	syscall(PUT_STRING, str);
+}
+
+int syskill(PID_t pid) {
+	return syscall(KILL, pid);
+}
+
+int syssetprio(int priority) {
+	return syscall(PRIORITY, priority);
 }

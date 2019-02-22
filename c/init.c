@@ -21,17 +21,17 @@ extern char *maxaddr;    /* max memory address (set in i386.c)	*/
 * Initializes the process queues.
 */
 void initProcessManager(void) {
-    PCB *curr = stoppedQueue;
+    PCB *curr = stoppedQueue = &processTable[0];
     for (int i = 0; i < PROCESS_TABLE_SIZE; i++) {
+        curr->pid = i + 1;
+        curr->priority = 3;
         if (i == PROCESS_TABLE_SIZE - 1) {
             curr->next = NULL;
             break;
         }
-        curr->next = (struct PCB*) (&processTable[i]);
-        curr->pid = i + 1;
+        curr->next = curr + 1;
         curr = (PCB*) curr->next;
     }
-    stoppedQueue = (PCB*) processTable;
 }
 
 /*------------------------------------------------------------------------

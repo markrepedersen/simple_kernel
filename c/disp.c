@@ -47,9 +47,26 @@ void ready(PCB *pcb) {
 	}
 }
 
+/**
+ * Searches the ready queue for a process with the given pid.
+ * If no such process is found, returns NULL.
+ */
+static PCB* findProcess(PID_t pid) {
+	PCB* curr = readyQueue;
+	while (curr) {
+		if (curr->pid == pid) return curr;
+		curr = curr->next;
+	}
+	return NULL;
+}
+
 void dispatch() {
 	PCB* process = next();
 	for (;;) {
+		if (!process) {
+			kprintf("Out of processes! Dying\n");
+			for (;;);
+		}
 		int contextAddress = contextswitch(process);
 		context_frame *context = (context_frame*) contextAddress;
 		REQUEST_TYPE call = (REQUEST_TYPE) ((REQUEST_TYPE) context->eax);
@@ -58,7 +75,7 @@ void dispatch() {
 				va_list params = ((va_list) (*context).edx);
 				functionPointer func = va_arg(params, functionPointer);
 				int stackSize = (int) va_arg(params, int);
-				create(func, stackSize);
+				process->ret = create(func, stackSize);
 				break;
 			}
 			case YIELD: {
@@ -70,6 +87,48 @@ void dispatch() {
 				cleanup(process);
 				process = next();
 				break;
+			}
+			case GET_PID: {
+				process->ret = process->pid;
+				break;
+			}
+			case PUT_STRING: {
+				va_list params = ((va_list) (*context).edx);
+				char* str = va_arg(params, char*);
+				kprintf(str);
+				break;
+			}
+			case KILL: {
+				va_list params = ((va_list) (*context).edx);
+				PID_t pid = va_arg(params, PID_t);
+				PCB* targetProcess = findProcess(pid);
+				if (!targetProcess) {
+					process->ret = -1;
+					kprintf("Process with id %d not found.\n", pid);
+				} else {
+					process->ret = 0;
+					cleanup(targetProcess);
+					if (targetProcess == process) process = next();
+				}
+				break;
+
+			}
+			case PRIORITY: {
+				va_list params = ((va_list) (*context).edx);
+				int targetPriority = va_arg(params, int);
+				if (targetPriority >= -1 && targetPriority <= 3) {
+					process->ret = process->priority;
+					if (targetPriority != -1) process->priority = targetPriority;
+				} else {
+					kprintf("Bad priority requested: %d\n", targetPriority);
+					process->ret = -1;
+				}
+				break;
+			}
+			default: {
+				kprintf("Bad request %d in process %d\n", call, process->pid);
+				kprintf("Stopping...\n");
+				for (;;);
 			}
 		}
 	}

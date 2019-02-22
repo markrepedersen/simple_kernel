@@ -33,6 +33,8 @@ typedef unsigned int size_t; /* Something that can hold the value of
 
 #define INTERRUPT_NUM 49
 
+typedef int PID_t;
+
 typedef struct {
   unsigned long edi;
   unsigned long esi;
@@ -52,15 +54,21 @@ typedef void (*functionPointer)(void);
 typedef enum {
   CREATE,
   YIELD,
-  STOP
+  STOP,
+  GET_PID,
+  PUT_STRING,
+  KILL,
+  PRIORITY
 } REQUEST_TYPE;
 
 typedef struct PCB {
-  int pid;
+  PID_t pid;
   int state;
   unsigned long esp;
   unsigned long originalSp;
   struct PCB *next;
+  int ret; // return value in case of system call
+  int priority;
 } PCB;
 
 PCB *readyQueue;
@@ -113,6 +121,14 @@ unsigned int syscreate(functionPointer func, int stack );
 void sysyield( void );
 
 void sysstop( void );
+
+PID_t sysgetpid(void);
+
+void sysputs(char* str);
+
+int syskill(PID_t pid);
+
+int syssetprio(int priority);
 
 void root( void );
 

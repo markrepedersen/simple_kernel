@@ -5,7 +5,7 @@
 
 void consume(void) {
     for(int i = 0; i < 15; i++) {
-        kprintf("everyone!\n");
+        // kprintf("everyone!\n");
         sysyield();
     }
     sysstop();
@@ -13,18 +13,52 @@ void consume(void) {
 
 void produce(void) {
     for(int i = 0; i < 15; i++) {
-        kprintf("Happy 2019 ");
+        // kprintf("Happy 2019 ");
         sysyield();
     }
     sysstop();
 }
 
+void spam(void) {
+    for (;;) {
+        sysputs("hello world\n");
+        sysyield();
+    }
+}
+
+void fallthrough(void) {
+    sysputs("This process will fall through.\n");
+}
+
+void testSpam(void) {
+    int spamPID = syscreate(&spam, 1024);
+    kprintf("spam pid is: %d\n", spamPID);
+    sysyield();
+    sysyield();
+    sysyield();
+    kprintf("killing spam... should no longer print anything\n");
+    syskill(spamPID);
+    for(;;) sysyield();
+}
+
+void testSetPrio(void) {
+    kprintf("priority: %d\n", syssetprio(-1));
+    syssetprio(0);
+    kprintf("priority: %d\n", syssetprio(-1));
+}
+
+void testFallThrough(void) {
+    kprintf("Creating fallthrough process.\n");
+    syscreate(&fallthrough, 1024);
+    sysyield();
+    sysyield();
+    kprintf("done?\n");
+    for(;;) sysyield();
+}
+
 void root(void) {
-    kprintf("Hello world!\n");
-    kprintf("creating produce: 0x%x\n", &produce);
-    syscreate(&produce, 1024);
-    kprintf("creating consume: 0x%x\n", &consume);
-    syscreate(&consume, 1024);
+    sysputs("In root\n");
+    testFallThrough();
     for (;;) {
         // kprintf("root yielding\n");
         sysyield();
