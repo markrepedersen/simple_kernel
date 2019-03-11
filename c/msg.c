@@ -30,6 +30,7 @@ static int isProcessStopped(PID_t pid) {
  * Returns 1 if the operation is done, or 0 if the process is now blocked.
  */
 int send(PID_t pid, PCB* process, int value) {
+    kprintf("process %d sending %d to %d\n", process->pid, value, pid);
     if (pid == process->pid) {
         // Sent message to self.
         kprintf("Process #%d tried to send message to itself\n", pid);
@@ -53,8 +54,22 @@ int send(PID_t pid, PCB* process, int value) {
         ready(targetProcess);
         return 1;
     } else {
-        targetProcess = findReadyProcess(pid);
-        if (!targetProcess) {
+        PCB* inBlocked = targetProcess;
+        PCB* inReady = findReadyProcess(pid);
+        PCB* inSleep = findProcess(pid, sleepQueue);
+        targetProcess = (PCB*) ((unsigned long) inBlocked | (unsigned long) inReady | (unsigned long) inSleep);
+        PCB* curr = sleepQueue;
+        // kprintf("sleep: ");
+        // while (curr) {
+        //     kprintf("%d ", curr->pid);
+        //     curr = curr->next;
+        // }
+        // kprintf("\n");
+        // kprintf("targetprocess: 0x%x\n", targetProcess);
+        // kprintf("inblock: 0x%x\n", inBlocked);
+        // kprintf("inready: 0x%x\n", inReady);
+        // kprintf("insleep: 0x%x\n", inSleep);
+        if (!((targetProcess == inBlocked) || (targetProcess == inReady) || (targetProcess == inSleep))) {
             kprintf("something went wrong in send().\n");
             process->ret = -100;
             return 1;

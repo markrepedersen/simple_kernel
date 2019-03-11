@@ -165,7 +165,6 @@ void producerConsumerFunc(void) {
     PID_t current_pid = sysgetpid();
     printIsAlive();
     syssleep(5000);
-    kprintf("done sleeping\n");
     sysrecv(&pid, &message);
     kprintf("Process %d: received message to sleep for %d ms.\n", current_pid, message);
     syssleep(message);
@@ -174,7 +173,7 @@ void producerConsumerFunc(void) {
 
 void root(void) {
     PID_t root_pid = sysgetpid();
-    int processes[4];
+    PID_t processes[4];
     printIsAlive();
     for (int i = 0; i < 4; ++i) {
         PID_t created_pid = syscreate(&producerConsumerFunc, 1024);

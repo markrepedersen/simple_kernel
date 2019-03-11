@@ -65,7 +65,7 @@ typedef enum {
   PRIORITY,
   TIMER_INT,
   SEND,
-  RECEIVE, 
+  RECEIVE,
   SLEEP
 } REQUEST_TYPE;
 
