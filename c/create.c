@@ -40,7 +40,10 @@ int addReady(char* stackAddress, void* memoryStart, char* memoryEnd) {
 			curr = curr->next;
 		}
 	}
-	else readyQueue[LOW_PRIORITY] = newProcess;
+	else {
+		readyQueue[LOW_PRIORITY] = newProcess;
+		return newProcess->pid;
+	}
 	return 0;
 }
 

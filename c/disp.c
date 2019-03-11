@@ -14,22 +14,35 @@ PCB *nextHighestPriorityProcess(void) {
 	return pop;
 }
 
-void addToStoppedQueue(PCB *pcb) {
-	PCB *prevFront = stoppedQueue;
-	stoppedQueue = (PCB*) pcb;
-	if (pcb != NULL) {
-		pcb->next = NULL;
-	}
-	stoppedQueue->next = prevFront;
-}
+
 
 /**
 * Cleans up a process by freeing its allocated stack and putting the process on the stopped queue.
 */
 void cleanup(PCB *pcb) {
+	// Clear out senders
+	PCB* curr = pcb->senders;
+	while (curr) {
+		PCB* next = curr->next;
+		ready(curr);
+		curr = next;
+	}
+	// Search receivers
+	curr = blockedQueue;
+	while (curr) {
+		PCB* next = curr->next;
+		if (*(curr->senderPID) == pcb->pid) {
+			ready(curr);
+		}
+		curr = next;
+	}
+	pcb->senders = NULL;
+
+	removeFromQueue(pcb, &(readyQueue[pcb->priority]));
 	kfree((void*) pcb->originalSp); // we don't know esp is pointing to the low address of stack; it might've been incremented since being allocated
 	pcb->esp = NULL;
-	addToStoppedQueue(pcb);
+	pcb->pid += PROCESS_TABLE_SIZE;
+	addToBack(pcb, &stoppedQueue);
 }
 
 /**
@@ -99,10 +112,10 @@ void addToFront(PCB *pcb, PCB** queue) {
 }
 
 /**
- * Searches the given queue for a process with the given pid.
+ * Searches for a ready process with the given pid.
  * If no such process is found, returns NULL.
  */
-static PCB *findReadyProcess(PID_t pid) {
+PCB *findReadyProcess(PID_t pid) {
 	for (int i = 0; i < sizeof(readyQueue) / sizeof(readyQueue[0]); ++i) {
 		PCB* process = findProcess(pid, readyQueue[i]);
 		if (process) return process;
@@ -157,14 +170,18 @@ void dispatch() {
 			}
 			case KILL: {
 				PID_t pid = va_arg(params, PID_t);
-				PCB* targetProcess = findReadyProcess(pid);
-				if (!targetProcess) {
-					process->ret = -1;
-					kprintf("Process with id %d not found.\n", pid);
+				if (pid == process->pid) {
+					cleanup(process);
+					process = next();
 				} else {
-					process->ret = 0;
-					cleanup(targetProcess);
-					if (targetProcess == process) process = next();
+					PCB* targetProcess = findReadyProcess(pid);
+					if (!targetProcess) {
+						process->ret = -1;
+						kprintf("Process with id %d not found.\n", pid);
+					} else {
+						process->ret = 0;
+						cleanup(targetProcess);
+					}
 				}
 				break;
 			}

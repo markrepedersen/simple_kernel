@@ -170,5 +170,9 @@ PCB* findProcess(PID_t pid, PCB* queue);
 
 void ready(PCB *pcb);
 
+PCB *findReadyProcess(PID_t pid);
+
+unsigned int syssleep(unsigned int milliseconds);
+
 /* Anything you add must be between the #define and this comment */
 #endif

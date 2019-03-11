@@ -4,8 +4,35 @@
 #include <xeroskernel.h>
 
 void sendFail(void) {
-    kprintf("calling syssend\n");
-    syssend(-123, 32);
+    kprintf("testing syssend\n");
+    kprintf("syssend returned %d, should return -2 on invalid process\n", syssend(990921, 325));
+    kprintf("syssend returned %d, should return -3 on send to self\n", syssend(sysgetpid(), 312));
+}
+
+void recvAllFail(void) {
+    PID_t pid = 0;
+    unsigned int num = 123;
+    kprintf("recv returned %d, should return -10 when it's the only process\n", sysrecv(&pid, &num));
+}
+
+void recvFail(void) {
+    kprintf("testing recv\n");
+    PID_t pid = 913221;
+    unsigned int num = 123;
+    kprintf("recv returned %d, should return -2 on invalid process\n", sysrecv(&pid, &num));
+    pid = sysgetpid();
+    kprintf("recv returned %d, should return -3 on recv from self\n", sysrecv(&pid, &num));
+}
+
+void simpleReceiver(void) {
+    unsigned int blah = 32;
+    PID_t pid = 1;
+    int retVal = sysrecv(&pid, &blah);
+    kprintf("sysrecv returned %d and received %d\n", retVal, blah);
+}
+
+void simpleSender(void) {
+    syssend(1, 844);
 }
 
 void consume(void) {
@@ -43,7 +70,7 @@ void testSpam(void) {
     sysyield();
     kprintf("killing spam... should no longer print anything\n");
     syskill(spamPID);
-    for(;;) sysyield();
+    for(;;);
 }
 
 void testSetPrio(void) {
@@ -65,17 +92,50 @@ void testSendFail(void) {
     sendFail();
 }
 
+void testReceiveFail(void) {
+    recvFail();
+}
+
+void simpleSend(void) {
+    PID_t pid = syscreate(simpleReceiver, 1024);
+    kprintf("created pid %d\n", pid);
+    syssend(pid, 90);
+}
+
+void simpleRecv(void) {
+    PID_t pid = syscreate(simpleSender, 1024);
+    unsigned int blah = 0;
+    kprintf("created pid %d\n", pid);
+    int retVal = sysrecv(&pid, &blah);
+    kprintf("sysrecv returned %d and received %d", retVal, blah);
+}
+
+void test3(void) {
+    PID_t pid = syscreate(fallthrough, 1024);
+    int retVal = syssend(pid, 321);
+    kprintf("syssend returned %d\n", retVal);
+}
+
+void test4_2(void) {
+    PID_t pid = syscreate(simpleSender, 1024);
+    unsigned int blah = 4141;
+    int retVal = sysrecv(&pid, &blah);
+    kprintf("sysrecv returned %d\n", retVal);
+    retVal = sysrecv(&pid, &blah);
+    kprintf("sysrecv returned %d\n", retVal);
+}
+
+void test6_1(void) {
+    kprintf("sfsdfsd\n");
+    kprintf("sfsdfsd\n");
+    kprintf("sfsdfsd\n");
+    PID_t pid = sysgetpid();
+    syskill(pid);
+}
+
 void root(void) {
-    // sysputs("In root\n");
-    // sysputs("In root\n");
-    // sysputs("In root\n");
-    // sysputs("In root\n");
-    // sysputs("In root\n");
-    // sysputs("In root\n");
-    // testSendFail();
-    // testFallThrough();
     for (;;) {
-        kprintf("root yielding\n");
+        // kprintf("root yielding\n");
         sysyield();
     }
 }

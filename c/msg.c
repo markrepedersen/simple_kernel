@@ -9,8 +9,20 @@
 static void sendValue(PCB* sender, PCB* receiver) {
     *(receiver->recvLocation) = sender->sendValue;
     if (*(receiver->senderPID) == 0) *(receiver->senderPID) = sender->pid;
-    sender->ret = 0;
-    receiver->ret = 0;
+    sender->ret = receiver->ret = 0;
+}
+
+// Returns 1 if the process is stopped.
+// Assumes pid is not 0.
+static int isProcessStopped(PID_t pid) {
+    PCB* curr = stoppedQueue;
+    while (curr) {
+        if ((((pid - 1) % PROCESS_TABLE_SIZE) + 1) == (((curr->pid - 1) % PROCESS_TABLE_SIZE) + 1)) {
+            return 1;
+        }
+        curr = curr->next;
+    }
+    return 0;
 }
 
 /**
@@ -25,8 +37,7 @@ int send(PID_t pid, PCB* process, int value) {
         return 1;
     }
 
-    PCB* targetProcess = findProcess(pid, stoppedQueue);
-    if (pid <= 0 || pid > PROCESS_TABLE_SIZE || targetProcess) {
+    if (pid <= 0 || pid > PROCESS_TABLE_SIZE || isProcessStopped(pid)) {
         // Received invalid process ID or ID of a stopped process
         kprintf("Process #%d does not exist.\n", pid);
         process->ret = -2;
@@ -34,21 +45,40 @@ int send(PID_t pid, PCB* process, int value) {
     }
 
     process->sendValue = value;
-    targetProcess = findProcess(pid, blockedQueue);
+    PCB* targetProcess = findProcess(pid, blockedQueue);
     if (targetProcess && (*(targetProcess->senderPID) == 0 || *(targetProcess->senderPID) == process->pid)) {
         // Receiver is already waiting on the sender. Send message, then restore receiver.
         sendValue(process, targetProcess);
         removeFromQueue(targetProcess, &blockedQueue);
-        // addToBack(targetProcess, &readyQueue);
         ready(targetProcess);
         return 1;
     } else {
+        targetProcess = findReadyProcess(pid);
+        if (!targetProcess) {
+            kprintf("something went wrong in send().\n");
+            process->ret = -100;
+            return 1;
+        }
         // Receiver is still active, add sender to the target process' list of senders.
         addToBack(process, &(targetProcess->senders));
-        addToFront(process, &blockedQueue);
+        process->senders = NULL;
         process->ret = -1;  // Will be overwritten on success.
         return 0;
     }
+}
+
+/**
+ * Returns the number of running, ready, or blocked processes.
+ */
+static unsigned int getNumProcesses(void) {
+    // Count processes in the stopped queue.
+    unsigned int count = 0;
+    PCB* curr = stoppedQueue;
+    while (curr) {
+        count++;
+        curr = curr->next;
+    }
+    return PROCESS_TABLE_SIZE - count;
 }
 
 /**
@@ -56,18 +86,14 @@ int send(PID_t pid, PCB* process, int value) {
  * Returns 1 if the operation is done, or 0 if the process is now blocked.
  */
 int recv(PID_t* pid, PCB* process) {
-    // check if only process
-    // todo
-
     if (*pid == process->pid) {
         // Sent message to self.
         kprintf("Process #%d tried to send message to itself\n", *pid);
         process->ret = -3;
-        return 0;
+        return 1;
     }
 
-    PCB* targetProcess = findProcess(*pid, stoppedQueue);
-    if (*pid < 0 || *pid > PROCESS_TABLE_SIZE || targetProcess) {
+    if (*pid != 0 && (*pid < 0 || *pid > PROCESS_TABLE_SIZE || isProcessStopped(*pid))) {
         // Received invalid process ID or ID of a stopped process
         kprintf("Process #%d does not exist.\n", *pid);
         process->ret = -2;
@@ -81,6 +107,13 @@ int recv(PID_t* pid, PCB* process) {
         return 1;
     }
 
+    if (getNumProcesses() == 1) {
+        kprintf("No other processes are running.\n");
+        process->ret = -10;
+        return 1;
+    }
+
+    process->senderPID = pid;
     if (*pid == 0) {
         if ((unsigned long) pid < process->originalSp || (char*) pid > process->memoryEnd - sizeof(int)) {
             // Bad memory location
@@ -91,10 +124,8 @@ int recv(PID_t* pid, PCB* process) {
         // Receiving from any sender. Check sender list.
         if (process->senders) {
             sendValue(process->senders, process);
-            // addToBack(process->senders, &readyQueue);
-            ready(process->senders);
-            removeFromQueue(process->senders, &blockedQueue);
             removeFromQueue(process->senders, &(process->senders));
+            ready(process->senders);
             return 1;
         } else {
             addToFront(process, &blockedQueue);
@@ -103,13 +134,11 @@ int recv(PID_t* pid, PCB* process) {
         }
     }
 
-    targetProcess = findProcess(*pid, blockedQueue);
-    if (targetProcess && findProcess(*pid, process->senders)) {
+    PCB* targetProcess = findProcess(*pid, process->senders);
+    if (targetProcess) {
         sendValue(targetProcess, process);
-        // addToBack(targetProcess, &readyQueue);
-        ready(targetProcess);
-        removeFromQueue(targetProcess, &blockedQueue);
         removeFromQueue(targetProcess, &(process->senders));
+        ready(targetProcess);
         return 1;
     } else {
         addToFront(process, &blockedQueue);

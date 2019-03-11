@@ -70,3 +70,5 @@ boot/zImage
 compile/xeros
 bochsrc
 
+# snapshot
+snapshot.txt
