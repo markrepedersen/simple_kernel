@@ -26,13 +26,13 @@ void recvFail(void) {
 
 void simpleReceiver(void) {
     unsigned int blah = 32;
-    PID_t pid = 1;
+    PID_t pid = 2;
     int retVal = sysrecv(&pid, &blah);
     kprintf("sysrecv returned %d and received %d\n", retVal, blah);
 }
 
 void simpleSender(void) {
-    syssend(1, 844);
+    syssend(2, 844);
 }
 
 void consume(void) {
@@ -160,7 +160,7 @@ void printIsAlive(void) {
 }
 
 void producerConsumerFunc(void) {
-    PID_t pid = 1;
+    PID_t pid = 2;
     unsigned int message;
     PID_t current_pid = sysgetpid();
     printIsAlive();
