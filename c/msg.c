@@ -39,7 +39,8 @@ int send(PID_t pid, PCB* process, int value) {
         // Receiver is already waiting on the sender. Send message, then restore receiver.
         sendValue(process, targetProcess);
         removeFromQueue(targetProcess, &blockedQueue);
-        addToBack(targetProcess, &readyQueue);
+        // addToBack(targetProcess, &readyQueue);
+        ready(targetProcess);
         return 1;
     } else {
         // Receiver is still active, add sender to the target process' list of senders.
@@ -90,7 +91,8 @@ int recv(PID_t* pid, PCB* process) {
         // Receiving from any sender. Check sender list.
         if (process->senders) {
             sendValue(process->senders, process);
-            addToBack(process->senders, &readyQueue);
+            // addToBack(process->senders, &readyQueue);
+            ready(process->senders);
             removeFromQueue(process->senders, &blockedQueue);
             removeFromQueue(process->senders, &(process->senders));
             return 1;
@@ -104,7 +106,8 @@ int recv(PID_t* pid, PCB* process) {
     targetProcess = findProcess(*pid, blockedQueue);
     if (targetProcess && findProcess(*pid, process->senders)) {
         sendValue(targetProcess, process);
-        addToBack(targetProcess, &readyQueue);
+        // addToBack(targetProcess, &readyQueue);
+        ready(targetProcess);
         removeFromQueue(targetProcess, &blockedQueue);
         removeFromQueue(targetProcess, &(process->senders));
         return 1;

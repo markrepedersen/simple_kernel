@@ -66,10 +66,16 @@ void testSendFail(void) {
 }
 
 void root(void) {
-    sysputs("In root\n");
-    testSendFail();
+    // sysputs("In root\n");
+    // sysputs("In root\n");
+    // sysputs("In root\n");
+    // sysputs("In root\n");
+    // sysputs("In root\n");
+    // sysputs("In root\n");
+    // testSendFail();
+    // testFallThrough();
     for (;;) {
-        // kprintf("root yielding\n");
+        kprintf("root yielding\n");
         sysyield();
     }
 }

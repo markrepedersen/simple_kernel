@@ -5,9 +5,9 @@
 PCB *nextHighestPriorityProcess(void) {
 	PCB *pop = NULL;
 	for (int i = 0; i < sizeof(readyQueue) / sizeof(readyQueue[0]); ++i) {
-		pop = (PCB*) readyQueue[i];
+		pop = readyQueue[i];
 		if (pop) {
-			readyQueue[i] = (PCB*) pop->next;
+			readyQueue[i] = pop->next;
 			break;
 		}
 	}
@@ -46,21 +46,7 @@ PCB *next(void) {
 */
 void ready(PCB *pcb) {
 	int priority_level = pcb->priority;
-	PCB *curr = readyQueue[priority_level];
-	if (!curr) {
-		curr = pcb;
-		curr->next = NULL;
-		return;
-	}
-
-	while (curr != NULL) {
-		if (curr->next == NULL) {
-			curr->next = pcb;
-			pcb->next = NULL;
-			return;
-		}
-		curr = (PCB*) curr->next;
-	}
+	addToBack(pcb, &(readyQueue[priority_level]));
 }
 
 /**
@@ -118,7 +104,6 @@ void addToFront(PCB *pcb, PCB** queue) {
  */
 static PCB *findReadyProcess(PID_t pid) {
 	for (int i = 0; i < sizeof(readyQueue) / sizeof(readyQueue[0]); ++i) {
-		PCB *curr = readyQueue[i];
 		PCB* process = findProcess(pid, readyQueue[i]);
 		if (process) return process;
 	}

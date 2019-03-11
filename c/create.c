@@ -19,7 +19,7 @@ PCB *getPCB(void) {
 * Adds a PCB block to the tail of the ready queue.
 * The PCB block is put into the lowest priority queue of the ready queue.
 */
-static int addReady(char* stackAddress, void* memoryStart, char* memoryEnd) {
+int addReady(char* stackAddress, void* memoryStart, char* memoryEnd) {
 	PCB *newProcess = getPCB();
 	if (!newProcess) return 0;
 
@@ -28,13 +28,13 @@ static int addReady(char* stackAddress, void* memoryStart, char* memoryEnd) {
 	newProcess->senders = NULL;
 	newProcess->priority = 3;
 	newProcess->memoryEnd = memoryEnd;
+	newProcess->next = NULL;
 
 	PCB *curr = readyQueue[LOW_PRIORITY];
 	if (curr) {
 		while (curr) {
 			if (!curr->next) {
 				curr->next = newProcess;
-				newProcess->next = NULL;
 				return newProcess->pid;
 			}
 			curr = curr->next;

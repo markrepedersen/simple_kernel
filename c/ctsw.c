@@ -5,7 +5,7 @@
    use the gnu conventions for specifying the instructions. (i.e this is the
    format used in class and on the slides.) You are not allowed to change the
    compiler/assembler options or issue directives to permit usage of Intel's
-   assembly language conventions.	
+   assembly language conventions.
 */
 
 void _ISREntryPoint(void);
@@ -60,6 +60,6 @@ int contextswitch(PCB *p) {
 		p->ret = rc;
 		context_frame *context = (context_frame*) p->esp;
 		context->eax = TIMER_INT;
-	} 
+	}
 	return (int) p->esp; // The address of the stack pointer
 }
