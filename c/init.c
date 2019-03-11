@@ -1,13 +1,14 @@
-/* initialize.c - initproc */
-
 #include <i386.h>
 #include <xeroskernel.h>
 #include <xeroslib.h>
 
-extern	int	entry( void );  /* start of kernel image, use &start    */
-extern	int	end( void );    /* end of kernel image, use &end        */
-extern  long	freemem; 	/* start of free memory (set in i386.c) */
-extern char	*maxaddr;	/* max memory address (set in i386.c)	*/
+extern int entry(void);  /* start of kernel image, use &start    */
+extern int end(void);    /* end of kernel image, use &end        */
+extern long freemem;    /* start of free memory (set in i386.c) */
+extern char *maxaddr;    /* max memory address (set in i386.c)	*/
+
+extern void testHardwareInterrupt1(void);
+extern void testHardwareInterrupt2(void);
 
 /************************************************************************/
 /***				NOTE:				      ***/
@@ -19,38 +20,38 @@ extern char	*maxaddr;	/* max memory address (set in i386.c)	*/
 /***								      ***/
 /************************************************************************/
 
+/**
+* Initialize the process queues.
+*/
+void initProcessManager(void) {
+    blockedQueue = NULL;
+    PCB *curr = stoppedQueue = &processTable[0];
+    for (int i = 0; i < PROCESS_TABLE_SIZE; i++) {
+        curr->pid = i + 1;
+        if (i == PROCESS_TABLE_SIZE - 1) {
+            curr->next = NULL;
+            break;
+        }
+        curr->next = curr + 1;
+        curr = (PCB*) curr->next;
+    }
+}
+
 /*------------------------------------------------------------------------
  *  The init process, this is where it all begins...
  *------------------------------------------------------------------------
  */
-void initproc( void )				/* The beginning */
-{
+void initproc(void) {
+    kprintf("\n\nCPSC 415, 2018W2 \n32 Bit Xeros -21.0.0 - even before beta \nLocated at: %x to %x\n", &entry, &end);
+    kmeminit();
+    initProcessManager();
+    initEvec();
+    create(NULL, 1024); // create idle process
+    create(&root, 1024); // create root process that continuously yields
+    dispatch();
 
-  kprintf( "\n\nCPSC 415, 2018W2 \n32 Bit Xeros -21.0.0 - even before beta \nLocated at: %x to %x\n", 
-	   &entry, &end); 
-  
-  kprintf("Max addr is %d %x\n", maxaddr, maxaddr);
-  
-  kmeminit();
-  kprintf("memory inited\n");
-  
-  dispatchinit();
-  kprintf("dispatcher inited\n");
-  
-  contextinit();
-  kprintf("context inited\n");
-  
-  
-  create( root, PROC_STACK );
-  kprintf("create inited\n");
-  
-  dispatch();
-  
-  kprintf("\n\nWhen your  kernel is working properly ");
-  kprintf("this line should never be printed!\n");
-
-  for(;;) ; /* loop forever */
-  
+    /* This code should never be reached after you are done */
+    kprintf("\n\nWhen your kernel is working properly");
+    kprintf("this line should never be printed!\n");
+    for (;;); /* loop forever */
 }
-
-

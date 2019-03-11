@@ -1,9 +1,9 @@
                  University of British Columbia
-                 Department of Computer Science 
+                 Department of Computer Science
                          CPSC 415
                      Winter 2018, Term 2
 
-                      Assignment 2 
+                      Assignment 1
 
 
 
@@ -21,21 +21,17 @@ this file then you should make a minor change to the file, such as
 adding a comment in the Acknowledgement section and then resubmit the
 file.
 
-When two students are working together one student will submit the file
-with just their information. The 2nd student will then checkout the project
-and update and commit this file with their information. Each student is to
-perform the commit from their own account.
 
 STUDENT  1
-Name :
-St. No:
-Unix Id :
-Email:
+Name : Kevin Wong
+St. No: 40396146
+Unix Id : c0h0b
+Email: kevinwong56@hotmail.com
 
 
 STUDENT  2
-Name :
-St. No:
-Unix Id :
-Email:
+Name : Mark Pedersen
+St. No: 37504140
+Unix Id : m3f0b
+Email: markrp@alumni.ubc.ca
 

@@ -7,3 +7,108 @@ respect to how new lines and carriage returns are treated. Line widths
 are to be limited to 80 characters.
 
 
+1.1
+    Send on invalid PIDs.
+    A process tries to send to an invalid PID (990921). The call should return immediately and return -2.
+    The process then tries to send a message to itself. Again, the call returns immediately, but returns -3.
+    See user.c::sendFail() for implementation.
+
+    Sample printout:
+    testing syssend
+    Process #990921 does not exist.
+    syssend returned -2, should return -2 on invalid process
+    Process #1 tried to send message to itself
+    syssend returned -3, should return -3 on send to self
+
+1.2
+    Send to a process.
+    The root process creates another process that receives from the root process, then will print out the result.
+    The root process sends 90 to the child process.
+    See user.c::simpleSend() for implementation.
+
+    Sample printout:
+    Located at: 0 to 5f44
+    created pid 2
+    in send()
+    targetprocess is 0x0
+    sysrecv returned 0 and received 90
+
+2.1
+    Receive from invalid PIDs:
+    See user.c::testReceiveFail() for implementation.
+    A process tries to receive from an invalid PID. Call should return -2 immediately.
+    It tries to receive from itself, returning -3 immediately.
+
+    Sample printout:
+    testing recv
+    Process #913221 does not exist.
+    recv returned -2, should return -2 on invalid process
+    Process #1 tried to send message to itself
+    recv returned -3, should return -3 on recv from self
+
+2.2
+    Receive from a process.
+    The root process creates another process that sends 844 to the root process.
+    The root process then receives from the child process and prints out the result.
+    See user.c::recvFail() for implementation.
+
+    Sample printout:
+    created pid 2
+    sysrecv returned 0 and received 844
+
+3
+    Send on a process that kills itself.
+    The root process creates another process then tries to send to it.
+    The child process then kills itself by falling through (while root process is waiting).
+    See user.c::test3() for implementation.
+
+    Sample printout:
+    This process will fall through.
+    syssend returned -1
+
+4.1
+    Receive from all when only process.
+    The root process tries to receive from any but it is the only process, so sysrecv returns -10 immediately.
+    See user.c::recvAllFail() for implementation.
+
+    Sample printout:
+    No other processes are running.
+    recv returned -10, should return -10 when it's the only process
+
+4.2
+    Receive from old process.
+    Root process creates a process that sends to the root process.
+    Root process tries to receive twice in a row from the child process. The first should be successful, while the second should fail.
+    See user.c::test4_2()
+    hello world
+    hello world
+    killing spam... should no longer print anything for implementation.
+
+    Sample printout:
+    sysrecv returned 0
+    Process #2 does not exist.
+    sysrecv returned -2
+
+5
+    Tested that hardware interrupts work by running two processes that print out unique strings that do not yield to each other.
+    If these two processes interleave, then we know that their quantums are running out and switching between each other.
+
+6.1
+    A process prints a message 3 times then calls syskill() on itself.
+
+    Sample printout:
+    sfsdfsd
+    sfsdfsd
+    sfsdfsd
+
+6.2
+    The root process spawns a child process that has an infinite loop, printing "hello world".
+    The root process yields a couple times, then kills the child process.
+    See user.c::testSpam() for implementation.
+
+    Sample printout:
+    spam pid is: 2
+    hello world
+    hello world
+    hello world
+    killing spam... should no longer print anything

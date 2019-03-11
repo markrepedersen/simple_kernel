@@ -1,81 +1,83 @@
-/* create.c : create a process
- */
-
 #include <xeroskernel.h>
-#include <xeroslib.h>
 
-pcb     proctab[MAX_PROC];
+#define SAFETY_MARGIN 16
 
-/* make sure interrupts are armed later on in the kernel development  */
-#define STARTING_EFLAGS         0x00003000
+/**
+* Pop the first unused PCB from the stopped queue.
+* Returns NULL if no free process control blocks.
+*/
+PCB *getPCB(void) {
+	PCB *createdProcess = stoppedQueue;
+	if (createdProcess != NULL) {
+		stoppedQueue = stoppedQueue->next;
+		return createdProcess;
+	}
+	return NULL;
+}
 
-// PIDs can't start at 0 nor can they be negative
-static PID_t      nextpid = 1;
+/**
+* Adds a PCB block to the tail of the ready queue.
+* The PCB block is put into the lowest priority queue of the ready queue.
+*/
+int addReady(char* stackAddress, void* memoryStart, char* memoryEnd, int isIdle) {
+	PCB *newProcess = getPCB();
+	if (!newProcess) return 0;
 
+	newProcess->esp = (unsigned long) stackAddress;
+	newProcess->originalSp = (unsigned long) memoryStart;
+	newProcess->senders = NULL;
+	newProcess->priority = 3;
+	newProcess->memoryEnd = memoryEnd;
+	newProcess->timeSlice = 0;
+	newProcess->next = NULL;
 
+	if (isIdle) {
+		idleProcess = newProcess;
+		return newProcess->pid;
+	}
 
-int create( funcptr fp, size_t stackSize ) {
-/***********************************************/
+	PCB *curr = readyQueue[LOW_PRIORITY];
+	if (curr) {
+		while (curr) {
+			if (!curr->next) {
+				curr->next = newProcess;
+				return newProcess->pid;
+			}
+			curr = curr->next;
+		}
+	}
+	else {
+		readyQueue[LOW_PRIORITY] = newProcess;
+		return newProcess->pid;
+	}
+	return 0;
+}
 
-    context_frame       *cf;
-    pcb                 *p = NULL;
-    int                 i;
+/**
+* Initialize the initial context of a process's stack.
+*/
+static void initContext(functionPointer func, char *stackAddress) {
+	context_frame* initialContext = (context_frame*) stackAddress;
+	initialContext->ebp = (unsigned long) initialContext;
+	initialContext->esp = (unsigned long) initialContext;
+	initialContext->ret_eip = (unsigned long) func;
+	initialContext->iret_cs = getCS();
+	initialContext->eflags = 0x00003200;
 
+	// Add fallback return address.
+	functionPointer* fallback = (functionPointer*) (initialContext + 1);
+	*fallback = &sysstop;
+}
 
-    /* If the PID becomes 0 it  has wrapped.
-     * This means that the next PID we handout could be
-     * in use. To find such a free number we have to propose a 
-     * new PID and then scan to see if it is in the table. If it 
-     * is then we have to try again. 
-     */
-
-
-    if (nextpid == 0) 
-      return CREATE_FAILURE;
-
-    // If the stack is too small make it larger
-    if( stackSize < PROC_STACK ) {
-        stackSize = PROC_STACK;
-    }
-
-    for( i = 0; i < MAX_PROC; i++ ) {
-        if( proctab[i].state == STATE_STOPPED ) {
-            p = &proctab[i];
-            break;
-        }
-    }
-    
-    //    Some stuff to help wih debugging
-    //    char buf[100];
-    //    sprintf(buf, "Slot %d empty\n", i);
-    //    kprintf(buf);
-    //    kprintf("Slot %d empty\n", i);
-    
-    if( !p ) {
-        return CREATE_FAILURE;
-    }
-
-
-    cf = kmalloc( stackSize );
-    if( !cf ) {
-        return CREATE_FAILURE;
-    }
-
-    cf = (context_frame *)((unsigned char *)cf + stackSize - 4);
-    cf--;
-
-    memset(cf, 0xA5, sizeof( context_frame ));
-
-    cf->iret_cs = getCS();
-    cf->iret_eip = (unsigned int)fp;
-    cf->eflags = STARTING_EFLAGS;
-
-    cf->esp = (int)(cf + 1);
-    cf->ebp = cf->esp;
-    p->esp = (unsigned long*)cf;
-    p->state = STATE_READY;
-    p->pid = nextpid++;
-
-    ready( p );
-    return p->pid;
+/**
+* Create a new process.
+* If the function passed is NULL, then the idle process is created.
+* Returns 0 if no process control blocks are available, and the process' id otherwise.
+*/
+int create(functionPointer func, int stack) {
+	void *sp = kmalloc(stack);
+	char *processMemoryEnd = (char*) sp + stack - sizeof(void*) - SAFETY_MARGIN;
+	char *stackAddress = processMemoryEnd - sizeof(context_frame);
+	initContext(func == NULL ? &idleproc : func, stackAddress);
+	return addReady(stackAddress, sp, processMemoryEnd, func == NULL);
 }

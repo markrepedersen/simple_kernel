@@ -5,146 +5,187 @@
 
 /* Symbolic constants used throughout Xinu */
 
-typedef	char    Bool;        /* Boolean type                  */
+typedef char Bool;        /* Boolean type                  */
 typedef unsigned int size_t; /* Something that can hold the value of
-                              * theoretical maximum number of bytes 
+                              * theoretical maximum number of bytes
                               * addressable in this architecture.
                               */
-#define	FALSE   0       /* Boolean constants             */
-#define	TRUE    1
-#define	EMPTY   (-1)    /* an illegal gpq                */
-#define	NULL    0       /* Null pointer for linked lists */
-#define	NULLCH '\0'     /* The null character            */
-
-#define CREATE_FAILURE -1  /* Process creation failed     */
-
+#define    FALSE   0       /* Boolean constants             */
+#define    TRUE    1
+#define    EMPTY   (-1)    /* an illegal gpq                */
+#define    NULL    0       /* Null pointer for linked lists */
+#define    NULLCH '\0'     /* The null character            */
 
 
 /* Universal return constants */
 
-#define	OK            1         /* system call ok               */
-#define	SYSERR       -1         /* system call failed           */
-#define	EOF          -2         /* End-of-file (usu. from read)	*/
-#define	TIMEOUT      -3         /* time out  (usu. recvtim)     */
-#define	INTRMSG      -4         /* keyboard "intr" key pressed	*/
-                                /*  (usu. defined as ^B)        */
-#define	BLOCKERR     -5         /* non-blocking op would block  */
+#define    OK            1         /* system call ok               */
+#define    SYSERR       -1         /* system call failed           */
+#define    EOF          -2         /* End-of-file (usu. from read)	*/
+#define    TIMEOUT      -3         /* time out  (usu. recvtim)     */
+#define    INTRMSG      -4         /* keyboard "intr" key pressed	*/
+/*  (usu. defined as ^B)        */
+#define    BLOCKERR     -5         /* non-blocking op would block  */
 
 /* Functions defined by startup code */
 
+#define PROCESS_TABLE_SIZE 32
 
-void           bzero(void *base, int cnt);
-void           bcopy(const void *src, void *dest, unsigned int n);
-void           disable(void);
-unsigned short getCS(void);
-unsigned char  inb(unsigned int);
-void           init8259(void);
-int            kprintf(char * fmt, ...);
-void           lidt(void);
-void           outb(unsigned int, unsigned char);
+#define PRIORITY_SIZE 4
 
+#define INTERRUPT_NUM 49
 
-/* Some constants involved with process creation and managment */
- 
-   /* Maximum number of processes */      
-#define MAX_PROC        64           
-   /* Kernel trap number          */
-#define KERNEL_INT      80
-   /* Minimum size of a stack when a process is created */
-#define PROC_STACK      (4096 * 4)    
-                      
+#define TIME_SLICE 10 // amount of milliseconds
 
-/* Constants to track states that a process is in */
-#define STATE_STOPPED   0
-#define STATE_READY     1
+typedef int PID_t;
 
-
-/* System call identifiers */
-#define SYS_STOP        10
-#define SYS_YIELD       11
-#define SYS_CREATE      22
-#define SYS_TIMER       33
-
-
-/* Structure to track the information associated with a single process */
-
-typedef unsigned int  PID_t;
-typedef struct struct_pcb pcb;
-struct struct_pcb {
-  unsigned long  *esp;    /* Pointer to top of saved stack           */
-  pcb            *next;   /* Next process in the list, if applicable */
-  int             state;  /* State the process is in, see above      */
-  PID_t           pid;    /* The process's ID                        */
-  int             ret;    /* Return value of system call             */
-                          /* if process interrupted because of system*/
-                          /* call                                    */
-  long            args;   
-};
-
-
-/* The actual space is set aside in create.c */
-extern pcb     proctab[MAX_PROC];
-
-#pragma pack(1)
-
-/* What the set of pushed registers looks like on the stack */
-typedef struct context_frame {
-  unsigned long        edi;
-  unsigned long        esi;
-  unsigned long        ebp;
-  unsigned long        esp;
-  unsigned long        ebx;
-  unsigned long        edx;
-  unsigned long        ecx;
-  unsigned long        eax;
-  unsigned long        iret_eip;
-  unsigned long        iret_cs;
-  unsigned long        eflags;
-  unsigned long        stackSlots[];
+typedef struct {
+  unsigned long edi;
+  unsigned long esi;
+  unsigned long ebp;
+  unsigned long esp;
+  unsigned long ebx;
+  unsigned long edx;
+  unsigned long ecx;
+  unsigned long eax;
+  unsigned long ret_eip;
+  unsigned long iret_cs;
+  unsigned long eflags;
 } context_frame;
 
+typedef void (*functionPointer)(void);
 
-/* Memory mangement system functions, it is OK for user level   */
-/* processes to call these.                                     */
+typedef enum {
+  CREATE,
+  YIELD,
+  STOP,
+  GET_PID,
+  PUT_STRING,
+  KILL,
+  PRIORITY,
+  TIMER_INT,
+  SEND,
+  RECEIVE,
+  SLEEP
+} REQUEST_TYPE;
 
-int      kfree(void *ptr);
-void     kmeminit( void );
-void     *kmalloc( size_t );
+typedef enum {
+  HIGH_PRIORITY,
+  HIGH_MEDIUM_PRIORITY,
+  LOW_MEDIUM_PRIORITY,
+  LOW_PRIORITY
+} PRIORITY_LEVEL;
 
+typedef struct PCB {
+  PID_t pid;
+  int state;
+  unsigned long esp;
+  unsigned long originalSp;
+  int ret; // return value in case of system call
+  int priority;
+  int sendValue; // Holds the value this process will send to.
+  int timeSlice; // The amount of time slices left for this process if it is sleeping.
+  unsigned int* recvLocation; // The location a value should be sent to.
+  PID_t* senderPID; // The process that this process is waiting for when receiving.
+  char* memoryEnd; // The end of the memory space that the process should be able to access.
+  struct PCB *next;
+  struct PCB *senders;
+} PCB;
 
-/* A typedef for the signature of the function passed to syscreate */
-typedef void    (*funcptr)(void);
+PCB *readyQueue[PRIORITY_SIZE];
+PCB *stoppedQueue;
+PCB *blockedQueue;
+PCB *sleepQueue;
 
+PCB *idleProcess;
 
-/* Internal functions for the kernel, applications must never  */
-/* call these.                                                 */
-void     dispatch( void );
-void     dispatchinit( void );
-void     ready( pcb *p );
-pcb      *next( void );
-void     contextinit( void );
-int      contextswitch( pcb *p );
-int      create( funcptr fp, size_t stack );
-void     set_evec(unsigned int xnum, unsigned long handler);
-void     printCF (void * stack);  /* print the call frame */
-int      syscall(int call, ...);  /* Used in the system call stub */
+/**
+* A static array containing a list of Process Control Blocks.
+* The different process queues will point to different indices of this table.
+*/
+PCB processTable[PROCESS_TABLE_SIZE];
 
+void bzero(void *base, int cnt);
 
+void bcopy(const void *src, void *dest, unsigned int n);
 
-/* Function prototypes for system calls as called by the application */
-unsigned int          syscreate( funcptr fp, size_t stack );
-void                  sysyield( void );
-void                  sysstop( void );
+void disable(void);
 
-/* The initial process that the system creates and schedules */
-void     root( void );
+unsigned short getCS(void);
 
+unsigned char inb(unsigned int);
 
+void init8259(void);
 
+int kprintf(char *fmt, ...);
 
-void           set_evec(unsigned int xnum, unsigned long handler);
+void lidt(void);
 
+void outb(unsigned int, unsigned char);
+
+void set_evec(unsigned int xnum, unsigned long handler);
+
+void kmeminit(void);
+
+void *kmalloc(size_t size);
+
+int kfree(void *ptr);
+
+void printCurrentFreeList(void);
+
+void dispatch(void);
+
+int contextswitch(PCB *p);
+
+int create(functionPointer func, int stack );
+
+int syscall( int call, ...  );
+
+unsigned int syscreate(functionPointer func, int stack );
+
+void sysyield( void );
+
+void sysstop( void );
+
+PID_t sysgetpid(void);
+
+void sysputs(char* str);
+
+int syskill(PID_t pid);
+
+int syssetprio(int priority);
+
+int syssend(PID_t dest_pid, unsigned long num);
+
+int sysrecv(PID_t *from_pid, unsigned int * num);
+
+unsigned int syssleep( unsigned int milliseconds );
+
+void root( void );
+
+void idleproc( void );
+
+void initEvec(void);
+
+int send(PID_t pid, PCB* process, int value);
+
+int recv(PID_t* pid, PCB* process);
+
+int removeFromQueue(PCB* pcb, PCB** queue);
+
+void addToBack(PCB* pcb, PCB** queue);
+
+void addToFront(PCB *pcb, PCB** queue);
+
+PCB* findProcess(PID_t pid, PCB* queue);
+
+void ready(PCB *pcb);
+
+PCB *findReadyProcess(PID_t pid);
+
+void tick(void);
+
+void sleep(PCB *process);
 
 /* Anything you add must be between the #define and this comment */
 #endif
-
