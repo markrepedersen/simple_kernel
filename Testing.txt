@@ -90,7 +90,8 @@ are to be limited to 80 characters.
     sysrecv returned -2
 
 5
-    ...
+    Tested that hardware interrupts work by running two processes that print out unique strings that do not yield to each other.
+    If these two processes interleave, then we know that their quantums are running out and switching between each other.
 
 6.1
     A process prints a message 3 times then calls syskill() on itself.
