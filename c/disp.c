@@ -1,9 +1,25 @@
 #include <xeroskernel.h>
 #include <stdarg.h>
+#include <i386.h>
+
+PCB *nextHighestPriorityProcess(void) {
+	PCB *pop = NULL;
+	for (int i = 0; i < sizeof(readyQueue) / sizeof(readyQueue[0]); ++i) {
+		pop = (PCB*) readyQueue[i];
+		if (pop) {
+			readyQueue[i] = (PCB*) pop->next;
+			break;
+		}
+	}
+	return pop;
+}
 
 void addToStoppedQueue(PCB *pcb) {
 	PCB *prevFront = stoppedQueue;
 	stoppedQueue = (PCB*) pcb;
+	if (pcb != NULL) {
+		pcb->next = NULL;
+	}
 	stoppedQueue->next = prevFront;
 }
 
@@ -17,26 +33,26 @@ void cleanup(PCB *pcb) {
 }
 
 /**
-* Removes the next process from the ready queue and returns a pointer to its process control block
+* Remove the next highest priority process in the ready queue.
 */
-PCB* next(void) {
-	PCB *pop = (PCB*) readyQueue;
-	if (pop != NULL) {
-		readyQueue = (PCB*) pop->next;
-	}
+PCB *next(void) {
+	PCB *pop = nextHighestPriorityProcess();
+	initPIT(100);
 	return pop;
 }
 
 /**
-* Takes a pointer to a process control block and adds it to the back of the ready queue
+* Adds a process to the back of the ready queue.
 */
 void ready(PCB *pcb) {
-	if (!readyQueue) {
-		readyQueue = pcb;
-		pcb->next = NULL;
-		return;
+	int priority_level = pcb->priority;
+	PCB *curr = readyQueue[priority_level];
+	if (!curr) {
+		curr = pcb;
+		curr->next = NULL;
+		return;	
 	}
-	PCB *curr = readyQueue;
+
 	while (curr != NULL) {
 		if (curr->next == NULL) {
 			curr->next = pcb;
@@ -51,28 +67,29 @@ void ready(PCB *pcb) {
  * Searches the ready queue for a process with the given pid.
  * If no such process is found, returns NULL.
  */
-static PCB* findProcess(PID_t pid) {
-	PCB* curr = readyQueue;
-	while (curr) {
-		if (curr->pid == pid) return curr;
-		curr = curr->next;
+static PCB *findProcess(PID_t pid) {
+	for (int i = 0; i < sizeof(readyQueue) / sizeof(readyQueue[0]); ++i) {
+		PCB *curr = readyQueue[i];
+		while (curr) {
+			if (curr->pid == pid) return curr;
+			curr = curr->next;
+		}
 	}
 	return NULL;
 }
 
 void dispatch() {
-	PCB* process = next();
+	PCB *process = next();
 	for (;;) {
 		if (!process) {
 			kprintf("Out of processes! Dying\n");
 			for (;;);
 		}
-		int contextAddress = contextswitch(process);
-		context_frame *context = (context_frame*) contextAddress;
-		REQUEST_TYPE call = (REQUEST_TYPE) ((REQUEST_TYPE) context->eax);
+		context_frame *context = (context_frame*) contextswitch(process);
+		REQUEST_TYPE call = (REQUEST_TYPE) context->eax;
 		switch(call) {
 			case CREATE: {
-				va_list params = ((va_list) (*context).edx);
+				va_list params = ((va_list) context->edx);
 				functionPointer func = va_arg(params, functionPointer);
 				int stackSize = (int) va_arg(params, int);
 				process->ret = create(func, stackSize);
@@ -93,13 +110,13 @@ void dispatch() {
 				break;
 			}
 			case PUT_STRING: {
-				va_list params = ((va_list) (*context).edx);
+				va_list params = ((va_list) context->edx);
 				char* str = va_arg(params, char*);
 				kprintf(str);
 				break;
 			}
 			case KILL: {
-				va_list params = ((va_list) (*context).edx);
+				va_list params = ((va_list) context->edx);
 				PID_t pid = va_arg(params, PID_t);
 				PCB* targetProcess = findProcess(pid);
 				if (!targetProcess) {
@@ -111,10 +128,9 @@ void dispatch() {
 					if (targetProcess == process) process = next();
 				}
 				break;
-
 			}
 			case PRIORITY: {
-				va_list params = ((va_list) (*context).edx);
+				va_list params = ((va_list) context->edx);
 				int targetPriority = va_arg(params, int);
 				if (targetPriority >= -1 && targetPriority <= 3) {
 					process->ret = process->priority;
@@ -123,6 +139,12 @@ void dispatch() {
 					kprintf("Bad priority requested: %d\n", targetPriority);
 					process->ret = -1;
 				}
+				break;	
+			}
+			case TIMER_INT: {
+				ready(process);
+				process = next();
+				end_of_intr();
 				break;
 			}
 			default: {

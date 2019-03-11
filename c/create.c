@@ -6,7 +6,7 @@
 * Pop the first unused PCB from the stopped queue.
 * Returns NULL if no free process control blocks.
 */
-PCB* getPCB(void) {
+PCB *getPCB(void) {
 	PCB *createdProcess = stoppedQueue;
 	if (createdProcess != NULL) {
 		stoppedQueue = stoppedQueue->next;
@@ -17,22 +17,28 @@ PCB* getPCB(void) {
 
 /**
 * Adds a PCB block to the tail of the ready queue.
+* The PCB block is put into the lowest priority queue of the ready queue.
 */
-int addReady(char* stackAddress, void* originalSP) {
+int addReady(char *stackAddress, void *originalSP) {
 	PCB *newProcess = getPCB();
 	if (!newProcess) return 0;
-	newProcess->esp = (unsigned long) stackAddress;
-	newProcess->originalSp = (unsigned long) originalSP;
-	if (!readyQueue) readyQueue = newProcess;
-	PCB *curr = readyQueue;
-	while (curr) {
-		if (!curr->next) {
-			curr->next = newProcess;
-			newProcess->next = NULL;
-			return newProcess->pid;
-		}
-		curr = curr->next;
+	else {
+		newProcess->esp = (unsigned long) stackAddress;
+		newProcess->originalSp = (unsigned long) originalSP;
 	}
+
+	PCB *curr = readyQueue[LOW_PRIORITY];
+	if (curr) {
+		while (curr) {
+			if (!curr->next) {
+				curr->next = newProcess;
+				newProcess->next = NULL;
+				return newProcess->pid;
+			}
+			curr = curr->next;
+		}
+	}
+	else readyQueue[LOW_PRIORITY] = newProcess;
 	return 0;
 }
 
@@ -45,7 +51,7 @@ static void initContext(functionPointer func, char *stackAddress) {
 	initialContext->esp = (unsigned long) initialContext;
 	initialContext->ret_eip = (unsigned long) func;
 	initialContext->iret_cs = getCS();
-	initialContext->eflags = 0x00003000;
+	initialContext->eflags = 0x00003200;
 
 	// Add fallback return address.
 	functionPointer* fallback = (functionPointer*) (initialContext + 1);

@@ -31,6 +31,8 @@ typedef unsigned int size_t; /* Something that can hold the value of
 
 #define PROCESS_TABLE_SIZE 32
 
+#define PRIORITY_SIZE 4
+
 #define INTERRUPT_NUM 49
 
 typedef int PID_t;
@@ -58,8 +60,16 @@ typedef enum {
   GET_PID,
   PUT_STRING,
   KILL,
-  PRIORITY
+  PRIORITY,
+  TIMER_INT
 } REQUEST_TYPE;
+
+typedef enum {
+  HIGH_PRIORITY,
+  HIGH_MEDIUM_PRIORITY,
+  LOW_MEDIUM_PRIORITY,
+  LOW_PRIORITY
+} PRIORITY_LEVEL;
 
 typedef struct PCB {
   PID_t pid;
@@ -71,7 +81,7 @@ typedef struct PCB {
   int priority;
 } PCB;
 
-PCB *readyQueue;
+PCB *readyQueue[PRIORITY_SIZE];
 PCB *stoppedQueue;
 
 /**
