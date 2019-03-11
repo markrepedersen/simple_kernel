@@ -61,7 +61,9 @@ typedef enum {
   PUT_STRING,
   KILL,
   PRIORITY,
-  TIMER_INT
+  TIMER_INT,
+  SEND,
+  RECEIVE
 } REQUEST_TYPE;
 
 typedef enum {
@@ -77,12 +79,18 @@ typedef struct PCB {
   unsigned long esp;
   unsigned long originalSp;
   struct PCB *next;
+  struct PCB* senders;
   int ret; // return value in case of system call
   int priority;
+  int sendValue; // Holds the value this process will send to.
+  unsigned int* recvLocation; // The location a value should be sent to.
+  PID_t* senderPID; // The process that this process is waiting for when receiving.
+  char* memoryEnd; // The end of the memory space that the process should be able to access.
 } PCB;
 
 PCB *readyQueue[PRIORITY_SIZE];
 PCB *stoppedQueue;
+PCB *blockedQueue;
 
 /**
 * A static array containing a list of Process Control Blocks.
@@ -140,9 +148,27 @@ int syskill(PID_t pid);
 
 int syssetprio(int priority);
 
+int syssend(PID_t dest_pid, unsigned long num);
+
+int sysrecv(PID_t *from_pid, unsigned int * num);
+
 void root( void );
 
 void initEvec(void);
+
+int send(PID_t pid, PCB* process, int value);
+
+int recv(PID_t* pid, PCB* process);
+
+int removeFromQueue(PCB* pcb, PCB** queue);
+
+void addToBack(PCB* pcb, PCB** queue);
+
+void addToFront(PCB *pcb, PCB** queue);
+
+PCB* findProcess(PID_t pid, PCB* queue);
+
+void ready(PCB *pcb);
 
 /* Anything you add must be between the #define and this comment */
 #endif

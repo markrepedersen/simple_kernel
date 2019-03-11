@@ -3,6 +3,11 @@
 
 #include <xeroskernel.h>
 
+void sendFail(void) {
+    kprintf("calling syssend\n");
+    syssend(-123, 32);
+}
+
 void consume(void) {
     for(int i = 0; i < 15; i++) {
         // kprintf("everyone!\n");
@@ -56,9 +61,13 @@ void testFallThrough(void) {
     for(;;) sysyield();
 }
 
+void testSendFail(void) {
+    sendFail();
+}
+
 void root(void) {
     sysputs("In root\n");
-    testFallThrough();
+    testSendFail();
     for (;;) {
         // kprintf("root yielding\n");
         sysyield();

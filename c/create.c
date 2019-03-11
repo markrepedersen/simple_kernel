@@ -19,13 +19,15 @@ PCB *getPCB(void) {
 * Adds a PCB block to the tail of the ready queue.
 * The PCB block is put into the lowest priority queue of the ready queue.
 */
-int addReady(char *stackAddress, void *originalSP) {
+static int addReady(char* stackAddress, void* memoryStart, char* memoryEnd) {
 	PCB *newProcess = getPCB();
 	if (!newProcess) return 0;
-	else {
-		newProcess->esp = (unsigned long) stackAddress;
-		newProcess->originalSp = (unsigned long) originalSP;
-	}
+
+	newProcess->esp = (unsigned long) stackAddress;
+	newProcess->originalSp = (unsigned long) memoryStart;
+	newProcess->senders = NULL;
+	newProcess->priority = 3;
+	newProcess->memoryEnd = memoryEnd;
 
 	PCB *curr = readyQueue[LOW_PRIORITY];
 	if (curr) {
@@ -64,7 +66,8 @@ static void initContext(functionPointer func, char *stackAddress) {
 */
 int create(functionPointer func, int stack) {
 	void *sp = kmalloc(stack);
-	char *stackAddress = (char*) sp + stack - sizeof(context_frame) - sizeof(void*) - SAFETY_MARGIN;
+	char* processMemoryEnd = (char*) sp + stack - sizeof(void*) - SAFETY_MARGIN;
+	char *stackAddress = processMemoryEnd - sizeof(context_frame);
 	initContext(func, stackAddress);
-	return addReady(stackAddress, sp);
+	return addReady(stackAddress, sp, processMemoryEnd);
 }

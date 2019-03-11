@@ -18,9 +18,10 @@ extern char *maxaddr;    /* max memory address (set in i386.c)	*/
 /************************************************************************/
 
 /**
-* Initialize the stopped queue.
+* Initialize the process queues.
 */
-void initStoppedQueue(void) {
+static void initProcessManager(void) {
+    blockedQueue = NULL;
     PCB *curr = stoppedQueue = &processTable[0];
     for (int i = 0; i < PROCESS_TABLE_SIZE; i++) {
         curr->pid = i + 1;
@@ -40,7 +41,7 @@ void initStoppedQueue(void) {
 void initproc(void) {
     kprintf("\n\nCPSC 415, 2018W2 \n32 Bit Xeros -21.0.0 - even before beta \nLocated at: %x to %x\n", &entry, &end);
     kmeminit();
-    initStoppedQueue();
+    initProcessManager();
     initEvec();
     create(&root, 1024);
     dispatch();

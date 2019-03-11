@@ -50,7 +50,7 @@ void ready(PCB *pcb) {
 	if (!curr) {
 		curr = pcb;
 		curr->next = NULL;
-		return;	
+		return;
 	}
 
 	while (curr != NULL) {
@@ -64,16 +64,72 @@ void ready(PCB *pcb) {
 }
 
 /**
- * Searches the ready queue for a process with the given pid.
- * If no such process is found, returns NULL.
+ * Removes a process from a queue. Assumes the queue is valid.
+ * Returns 1 if the queue was removed, 0 if it was not present.
  */
-static PCB *findProcess(PID_t pid) {
-	for (int i = 0; i < sizeof(readyQueue) / sizeof(readyQueue[0]); ++i) {
-		PCB *curr = readyQueue[i];
-		while (curr) {
-			if (curr->pid == pid) return curr;
+int removeFromQueue(PCB* pcb, PCB** queue) {
+	if (!*queue) return 0;
+	if (*queue == pcb) {
+		*queue = pcb->next;
+		return 1;
+	}
+	PCB* curr = *queue;
+	while (curr) {
+		if (curr->next == pcb) {
+			curr->next = pcb->next;
+			return 1;
+		}
+		curr = curr->next;
+	}
+	return 0;
+}
+
+/**
+ * Adds a process to the back of a queue. Assumes the queue is valid.
+ */
+void addToBack(PCB* pcb, PCB** queue) {
+	pcb->next = NULL;
+	if (!*queue) {
+		*queue = pcb;
+	} else {
+		PCB* curr = *queue;
+		while(curr != NULL){
+			if (curr->next == NULL) {
+				curr->next = pcb;
+				return;
+			}
 			curr = curr->next;
 		}
+
+	}
+}
+
+/**
+ * Adds a process to the front of a queue. Assumes the queue is valid.
+ */
+void addToFront(PCB *pcb, PCB** queue) {
+	pcb->next = *queue;
+	*queue = pcb;
+}
+
+/**
+ * Searches the given queue for a process with the given pid.
+ * If no such process is found, returns NULL.
+ */
+static PCB *findReadyProcess(PID_t pid) {
+	for (int i = 0; i < sizeof(readyQueue) / sizeof(readyQueue[0]); ++i) {
+		PCB *curr = readyQueue[i];
+		PCB* process = findProcess(pid, readyQueue[i]);
+		if (process) return process;
+	}
+	return NULL;
+}
+
+PCB* findProcess(PID_t pid, PCB* queue) {
+	PCB* curr = queue;
+	while (curr) {
+		if (curr->pid == pid) return curr;
+		curr = curr->next;
 	}
 	return NULL;
 }
@@ -87,9 +143,9 @@ void dispatch() {
 		}
 		context_frame *context = (context_frame*) contextswitch(process);
 		REQUEST_TYPE call = (REQUEST_TYPE) context->eax;
+		va_list params = (va_list) context->edx;
 		switch(call) {
 			case CREATE: {
-				va_list params = ((va_list) context->edx);
 				functionPointer func = va_arg(params, functionPointer);
 				int stackSize = (int) va_arg(params, int);
 				process->ret = create(func, stackSize);
@@ -110,15 +166,13 @@ void dispatch() {
 				break;
 			}
 			case PUT_STRING: {
-				va_list params = ((va_list) context->edx);
 				char* str = va_arg(params, char*);
 				kprintf(str);
 				break;
 			}
 			case KILL: {
-				va_list params = ((va_list) context->edx);
 				PID_t pid = va_arg(params, PID_t);
-				PCB* targetProcess = findProcess(pid);
+				PCB* targetProcess = findReadyProcess(pid);
 				if (!targetProcess) {
 					process->ret = -1;
 					kprintf("Process with id %d not found.\n", pid);
@@ -130,7 +184,6 @@ void dispatch() {
 				break;
 			}
 			case PRIORITY: {
-				va_list params = ((va_list) context->edx);
 				int targetPriority = va_arg(params, int);
 				if (targetPriority >= -1 && targetPriority <= 3) {
 					process->ret = process->priority;
@@ -139,12 +192,25 @@ void dispatch() {
 					kprintf("Bad priority requested: %d\n", targetPriority);
 					process->ret = -1;
 				}
-				break;	
+				break;
 			}
 			case TIMER_INT: {
 				ready(process);
 				process = next();
 				end_of_intr();
+				break;
+			}
+			case SEND: {
+				PID_t pid = va_arg(params, PID_t);
+				int value = va_arg(params, int);
+				if (!send(pid, process, value)) process = next();
+				break;
+			}
+			case RECEIVE: {
+				PID_t* pid = va_arg(params, PID_t*);
+				unsigned int* num = va_arg(params, unsigned int*);
+				process->recvLocation = num;
+				if (!recv(pid, process)) process = next();
 				break;
 			}
 			default: {
