@@ -58,17 +58,6 @@ int send(PID_t pid, PCB* process, int value) {
         PCB* inReady = findReadyProcess(pid);
         PCB* inSleep = findProcess(pid, sleepQueue);
         targetProcess = (PCB*) ((unsigned long) inBlocked | (unsigned long) inReady | (unsigned long) inSleep);
-        PCB* curr = sleepQueue;
-        // kprintf("sleep: ");
-        // while (curr) {
-        //     kprintf("%d ", curr->pid);
-        //     curr = curr->next;
-        // }
-        // kprintf("\n");
-        // kprintf("targetprocess: 0x%x\n", targetProcess);
-        // kprintf("inblock: 0x%x\n", inBlocked);
-        // kprintf("inready: 0x%x\n", inReady);
-        // kprintf("insleep: 0x%x\n", inSleep);
         if (!((targetProcess == inBlocked) || (targetProcess == inReady) || (targetProcess == inSleep))) {
             kprintf("something went wrong in send().\n");
             process->ret = -100;

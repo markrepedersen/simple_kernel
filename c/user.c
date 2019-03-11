@@ -168,7 +168,6 @@ void producerConsumerFunc(void) {
     sysrecv(&pid, &message);
     kprintf("Process %d: received message to sleep for %d ms.\n", current_pid, message);
     syssleep(message);
-    kprintf("Process %d done sleeping\n", current_pid);
 }
 
 void root(void) {
