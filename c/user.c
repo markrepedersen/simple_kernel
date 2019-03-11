@@ -160,11 +160,12 @@ void printIsAlive(void) {
 }
 
 void producerConsumerFunc(void) {
-    PID_t pid = 1;
+    PID_t pid = 2;
     unsigned int message;
     PID_t current_pid = sysgetpid();
     printIsAlive();
     syssleep(5000);
+    kprintf("done sleeping\n");
     sysrecv(&pid, &message);
     kprintf("Process %d: received message to sleep for %d ms.\n", current_pid, message);
     syssleep(message);

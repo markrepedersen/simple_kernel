@@ -17,6 +17,7 @@ void insert(PCB *process) {
 			process->timeSlice = process->timeSlice - curr->timeSlice;
 			if (!curr->next) {
 				curr->next = process;
+				process->next = NULL;
 			}
 		} else {
 			PCB *temp = curr;
