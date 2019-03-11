@@ -47,19 +47,19 @@ void cleanup(PCB *pcb) {
 
 /**
 * Remove the next highest priority process in the ready queue.
+* If none exist, then run the idle process.
 */
 PCB *next(void) {
 	PCB *pop = nextHighestPriorityProcess();
-	initPIT(100);
-	return pop;
+	initPIT(TIME_SLICE * 10);
+	return pop != NULL ? pop : idleProcess;
 }
 
 /**
 * Adds a process to the back of the ready queue.
 */
 void ready(PCB *pcb) {
-	int priority_level = pcb->priority;
-	addToBack(pcb, &(readyQueue[priority_level]));
+	addToBack(pcb, &(readyQueue[pcb->priority]));
 }
 
 /**
@@ -123,7 +123,7 @@ PCB *findReadyProcess(PID_t pid) {
 	return NULL;
 }
 
-PCB* findProcess(PID_t pid, PCB* queue) {
+PCB *findProcess(PID_t pid, PCB* queue) {
 	PCB* curr = queue;
 	while (curr) {
 		if (curr->pid == pid) return curr;
@@ -135,10 +135,6 @@ PCB* findProcess(PID_t pid, PCB* queue) {
 void dispatch() {
 	PCB *process = next();
 	for (;;) {
-		if (!process) {
-			kprintf("Out of processes! Dying\n");
-			for (;;);
-		}
 		context_frame *context = (context_frame*) contextswitch(process);
 		REQUEST_TYPE call = (REQUEST_TYPE) context->eax;
 		va_list params = (va_list) context->edx;
@@ -197,6 +193,7 @@ void dispatch() {
 				break;
 			}
 			case TIMER_INT: {
+				tick();
 				ready(process);
 				process = next();
 				end_of_intr();
@@ -215,11 +212,23 @@ void dispatch() {
 				if (!recv(pid, process)) process = next();
 				break;
 			}
+			case SLEEP: {
+				int ticks = va_arg(params, int);
+				process->timeSlice = ticks;
+				sleep(process);
+				process = next();
+				process->ret = 0; // the amount of time the sleep has left once unblocked. In this assignment it returns 0 always.
+				break;
+			}
 			default: {
 				kprintf("Bad request %d in process %d\n", call, process->pid);
 				kprintf("Stopping...\n");
 				for (;;);
 			}
 		}
+	}
+	if (!process) {
+		kprintf("Out of processes! Dying\n");
+		for (;;);
 	}
 }

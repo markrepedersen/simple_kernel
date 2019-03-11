@@ -19,7 +19,7 @@ PCB *getPCB(void) {
 * Adds a PCB block to the tail of the ready queue.
 * The PCB block is put into the lowest priority queue of the ready queue.
 */
-int addReady(char* stackAddress, void* memoryStart, char* memoryEnd) {
+int addReady(char* stackAddress, void* memoryStart, char* memoryEnd, int isIdle) {
 	PCB *newProcess = getPCB();
 	if (!newProcess) return 0;
 
@@ -28,7 +28,13 @@ int addReady(char* stackAddress, void* memoryStart, char* memoryEnd) {
 	newProcess->senders = NULL;
 	newProcess->priority = 3;
 	newProcess->memoryEnd = memoryEnd;
+	newProcess->timeSlice = 0;
 	newProcess->next = NULL;
+
+	if (isIdle) {
+		idleProcess = newProcess;
+		return newProcess->pid;
+	}
 
 	PCB *curr = readyQueue[LOW_PRIORITY];
 	if (curr) {
@@ -65,12 +71,13 @@ static void initContext(functionPointer func, char *stackAddress) {
 
 /**
 * Create a new process.
+* If the function passed is NULL, then the idle process is created.
 * Returns 0 if no process control blocks are available, and the process' id otherwise.
 */
 int create(functionPointer func, int stack) {
 	void *sp = kmalloc(stack);
-	char* processMemoryEnd = (char*) sp + stack - sizeof(void*) - SAFETY_MARGIN;
+	char *processMemoryEnd = (char*) sp + stack - sizeof(void*) - SAFETY_MARGIN;
 	char *stackAddress = processMemoryEnd - sizeof(context_frame);
-	initContext(func, stackAddress);
-	return addReady(stackAddress, sp, processMemoryEnd);
+	initContext(func == NULL ? &idleproc : func, stackAddress);
+	return addReady(stackAddress, sp, processMemoryEnd, func == NULL);
 }

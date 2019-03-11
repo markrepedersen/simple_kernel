@@ -50,6 +50,11 @@ int syssend(PID_t dest_pid, unsigned long num) {
 	return syscall(SEND, dest_pid, num);
 }
 
-int sysrecv(PID_t *from_pid, unsigned int * num) {
+int sysrecv(PID_t *from_pid, unsigned int *num) {
 	return syscall(RECEIVE, from_pid, num);
+}
+
+unsigned int syssleep( unsigned int milliseconds ) {
+	int ticks = milliseconds / TIME_SLICE;
+	return syscall(SLEEP, ticks);
 }

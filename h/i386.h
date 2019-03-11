@@ -1,5 +1,8 @@
 /* i386.h - DELAY */
 
+#ifndef I386_H
+#define I386_H
+
 #define	NBPG		4096
 #define KERNEL_STACK	(4*4096)    
 
@@ -115,3 +118,4 @@ struct segtr {
 void initPIT( int divisor );
 void end_of_intr( void );
 
+#endif

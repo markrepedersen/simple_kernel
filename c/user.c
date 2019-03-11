@@ -133,9 +133,65 @@ void test6_1(void) {
     syskill(pid);
 }
 
-void root(void) {
-    for (;;) {
-        // kprintf("root yielding\n");
-        sysyield();
+void testHardwareInterrupt1(void) {
+    while (1) {
+        kprintf("This is process 1.\n");
     }
 }
+
+void testHardwareInterrupt2(void) {
+    while (1) {
+        kprintf("This is process 2.\n");
+    }
+}
+
+void testSleep(void) {
+    syssleep(1000);
+    kprintf("done sleeping\n");
+}
+
+void idleproc( void ) {
+    for(;;);
+}
+
+void printIsAlive(void) {
+    PID_t current_pid = sysgetpid();
+    kprintf("Process %d: alive\n", current_pid);
+}
+
+void producerConsumerFunc(void) {
+    PID_t pid = 1;
+    unsigned int message;
+    PID_t current_pid = sysgetpid();
+    printIsAlive();
+    syssleep(5000);
+    sysrecv(&pid, &message);
+    kprintf("Process %d: received message to sleep for %d ms.\n", current_pid, message);
+    syssleep(message);
+    kprintf("Process %d done sleeping\n", current_pid);
+}
+
+void root(void) {
+    PID_t root_pid = sysgetpid();
+    int processes[4];
+    printIsAlive();
+    for (int i = 0; i < 4; ++i) {
+        PID_t created_pid = syscreate(&producerConsumerFunc, 1024);
+        kprintf("Process %d: created a process with pid: %d\n", root_pid, created_pid);
+        processes[i] = created_pid;
+    }
+    syssleep(4000);
+    syssend(processes[2], 10000);
+    syssend(processes[1], 7000);
+    syssend(processes[0], 20000);
+    syssend(processes[3], 27000);
+    unsigned int message;
+    PID_t proc = processes[3];
+    int receiveStatus = sysrecv(&proc, &message);
+    kprintf("Process %d: status of receive was %d\n", root_pid, receiveStatus);
+    int sendStatus = syssend(processes[2], message);
+    kprintf("Process %d: send status was %d\n", root_pid, sendStatus);
+    syskill(root_pid);
+}
+
+

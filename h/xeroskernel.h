@@ -35,6 +35,8 @@ typedef unsigned int size_t; /* Something that can hold the value of
 
 #define INTERRUPT_NUM 49
 
+#define TIME_SLICE 10 // amount of milliseconds
+
 typedef int PID_t;
 
 typedef struct {
@@ -63,7 +65,8 @@ typedef enum {
   PRIORITY,
   TIMER_INT,
   SEND,
-  RECEIVE
+  RECEIVE, 
+  SLEEP
 } REQUEST_TYPE;
 
 typedef enum {
@@ -78,19 +81,23 @@ typedef struct PCB {
   int state;
   unsigned long esp;
   unsigned long originalSp;
-  struct PCB *next;
-  struct PCB* senders;
   int ret; // return value in case of system call
   int priority;
   int sendValue; // Holds the value this process will send to.
+  int timeSlice; // The amount of time slices left for this process if it is sleeping.
   unsigned int* recvLocation; // The location a value should be sent to.
   PID_t* senderPID; // The process that this process is waiting for when receiving.
   char* memoryEnd; // The end of the memory space that the process should be able to access.
+  struct PCB *next;
+  struct PCB *senders;
 } PCB;
 
 PCB *readyQueue[PRIORITY_SIZE];
 PCB *stoppedQueue;
 PCB *blockedQueue;
+PCB *sleepQueue;
+
+PCB *idleProcess;
 
 /**
 * A static array containing a list of Process Control Blocks.
@@ -152,7 +159,11 @@ int syssend(PID_t dest_pid, unsigned long num);
 
 int sysrecv(PID_t *from_pid, unsigned int * num);
 
+unsigned int syssleep( unsigned int milliseconds );
+
 void root( void );
+
+void idleproc( void );
 
 void initEvec(void);
 
@@ -172,7 +183,9 @@ void ready(PCB *pcb);
 
 PCB *findReadyProcess(PID_t pid);
 
-unsigned int syssleep(unsigned int milliseconds);
+void tick(void);
+
+void sleep(PCB *process);
 
 /* Anything you add must be between the #define and this comment */
 #endif

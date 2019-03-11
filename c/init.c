@@ -7,6 +7,9 @@ extern int end(void);    /* end of kernel image, use &end        */
 extern long freemem;    /* start of free memory (set in i386.c) */
 extern char *maxaddr;    /* max memory address (set in i386.c)	*/
 
+extern void testHardwareInterrupt1(void);
+extern void testHardwareInterrupt2(void);
+
 /************************************************************************/
 /***				NOTE:				      ***/
 /***								      ***/
@@ -20,7 +23,7 @@ extern char *maxaddr;    /* max memory address (set in i386.c)	*/
 /**
 * Initialize the process queues.
 */
-static void initProcessManager(void) {
+void initProcessManager(void) {
     blockedQueue = NULL;
     PCB *curr = stoppedQueue = &processTable[0];
     for (int i = 0; i < PROCESS_TABLE_SIZE; i++) {
@@ -43,7 +46,8 @@ void initproc(void) {
     kmeminit();
     initProcessManager();
     initEvec();
-    create(&root, 1024);
+    create(NULL, 1024); // create idle process
+    create(&root, 1024); // create root process that continuously yields
     dispatch();
 
     /* This code should never be reached after you are done */
