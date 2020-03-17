@@ -2,7 +2,6 @@
 #include <xeroslib.h>
 
 /* sleep.c : sleep device
-   This file does not need to modified until assignment 2
  */
 
 void insert(PCB *process) {
@@ -14,7 +13,6 @@ void insert(PCB *process) {
 		return;
 	}
 	while (curr) {
-		// kprintf("curr: \n");
 		if (curr->timeSlice <= process->timeSlice) {
 			process->timeSlice = process->timeSlice - curr->timeSlice;
 			if (!curr->next) {
@@ -43,6 +41,7 @@ void tick(void) {
 			PCB *wokenUpProcess = sleepQueue;
 			sleepQueue = sleepQueue->next;
 			wokenUpProcess->next = NULL;
+			wokenUpProcess->ret = 0;
 			ready(wokenUpProcess);
 		}
 		sleepQueue->timeSlice--;

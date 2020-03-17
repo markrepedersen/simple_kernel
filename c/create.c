@@ -25,36 +25,19 @@ int addReady(char* stackAddress, void* memoryStart, char* memoryEnd, int isIdle)
 
 	newProcess->esp = (unsigned long) stackAddress;
 	newProcess->originalSp = (unsigned long) memoryStart;
-	newProcess->senders = NULL;
-	newProcess->priority = 3;
 	newProcess->memoryEnd = memoryEnd;
-	newProcess->timeSlice = 0;
-	newProcess->next = NULL;
-
+	newProcess->signalMask = 0;
 	if (isIdle) {
 		idleProcess = newProcess;
 		return newProcess->pid;
 	}
 
-	PCB *curr = readyQueue[LOW_PRIORITY];
-	if (curr) {
-		while (curr) {
-			if (!curr->next) {
-				curr->next = newProcess;
-				return newProcess->pid;
-			}
-			curr = curr->next;
-		}
-	}
-	else {
-		readyQueue[LOW_PRIORITY] = newProcess;
-		return newProcess->pid;
-	}
-	return 0;
+	addToBack(newProcess, &readyQueue[LOW_PRIORITY]);
+	return newProcess->pid;
 }
 
 /**
-* Initialize the initial context of a process's stack.
+* Initialize the context of a process's stack.
 */
 static void initContext(functionPointer func, char *stackAddress) {
 	context_frame* initialContext = (context_frame*) stackAddress;

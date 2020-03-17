@@ -28,6 +28,7 @@ void initProcessManager(void) {
     PCB *curr = stoppedQueue = &processTable[0];
     for (int i = 0; i < PROCESS_TABLE_SIZE; i++) {
         curr->pid = i + 1;
+        curr->signalMask = 0;
         if (i == PROCESS_TABLE_SIZE - 1) {
             curr->next = NULL;
             break;

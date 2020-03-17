@@ -62,17 +62,6 @@ void fallthrough(void) {
     sysputs("This process will fall through.\n");
 }
 
-void testSpam(void) {
-    int spamPID = syscreate(&spam, 1024);
-    kprintf("spam pid is: %d\n", spamPID);
-    sysyield();
-    sysyield();
-    sysyield();
-    kprintf("killing spam... should no longer print anything\n");
-    syskill(spamPID);
-    for(;;);
-}
-
 void testSetPrio(void) {
     kprintf("priority: %d\n", syssetprio(-1));
     syssetprio(0);
@@ -98,7 +87,7 @@ void testReceiveFail(void) {
 
 void simpleSend(void) {
     PID_t pid = syscreate(simpleReceiver, 1024);
-    kprintf("created pid %d\n", pid);
+    kprintf("created pid %d\n ", pid);
     syssend(pid, 90);
 }
 
@@ -123,14 +112,6 @@ void test4_2(void) {
     kprintf("sysrecv returned %d\n", retVal);
     retVal = sysrecv(&pid, &blah);
     kprintf("sysrecv returned %d\n", retVal);
-}
-
-void test6_1(void) {
-    kprintf("sfsdfsd\n");
-    kprintf("sfsdfsd\n");
-    kprintf("sfsdfsd\n");
-    PID_t pid = sysgetpid();
-    syskill(pid);
 }
 
 void testHardwareInterrupt1(void) {
@@ -170,27 +151,47 @@ void producerConsumerFunc(void) {
     syssleep(message);
 }
 
+void handler(void *cntx) {
+    int pid = sysgetpid();
+    kprintf("this is the handler for process: %d\n", pid);
+}
+
+void signalProcess(void) {
+    PID_t pid = sysgetpid();
+    kprintf("Running process: %d\n", pid);
+    signalHandler *oldHandler = NULL;
+    syssighandler(10, &handler, oldHandler);
+    for(;;);
+    kprintf("fail\n");
+}
+
 void root(void) {
     PID_t root_pid = sysgetpid();
-    PID_t processes[4];
-    printIsAlive();
-    for (int i = 0; i < 4; ++i) {
-        PID_t created_pid = syscreate(&producerConsumerFunc, 1024);
-        kprintf("Process %d: created a process with pid: %d\n", root_pid, created_pid);
-        processes[i] = created_pid;
-    }
-    syssleep(4000);
-    syssend(processes[2], 10000);
-    syssend(processes[1], 7000);
-    syssend(processes[0], 20000);
-    syssend(processes[3], 27000);
-    unsigned int message;
-    PID_t proc = processes[3];
-    int receiveStatus = sysrecv(&proc, &message);
-    kprintf("Process %d: status of receive was %d\n", root_pid, receiveStatus);
-    int sendStatus = syssend(processes[2], message);
-    kprintf("Process %d: send status was %d\n", root_pid, sendStatus);
-    syskill(root_pid);
+    kprintf("root process: %d\n", root_pid);
+    PID_t adversary_pid = syscreate(&signalProcess, 1024);
+    kprintf("created process: %d\n", adversary_pid);
+    syssleep(1000);
+    syskill(adversary_pid, 10);
+
+
+    // PID_t processes[4];
+    // printIsAlive();
+    // for (int i = 0; i < 4; ++i) {
+    //     PID_t created_pid = syscreate(&producerConsumerFunc, 1024);
+    //     kprintf("Process %d: created a process with pid: %d\n", root_pid, created_pid);
+    //     processes[i] = created_pid;
+    // }
+    // syssleep(4000);
+    // syssend(processes[2], 10000);
+    // syssend(processes[1], 7000);
+    // syssend(processes[0], 20000);
+    // syssend(processes[3], 27000);
+    // unsigned int message;
+    // PID_t proc = processes[3];
+    // int receiveStatus = sysrecv(&proc, &message);
+    // kprintf("Process %d: status of receive was %d\n", root_pid, receiveStatus);
+    // int sendStatus = syssend(processes[2], message);
+    // kprintf("Process %d: send status was %d\n", root_pid, sendStatus);
 }
 
 

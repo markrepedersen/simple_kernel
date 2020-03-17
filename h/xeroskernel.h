@@ -16,7 +16,6 @@ typedef unsigned int size_t; /* Something that can hold the value of
 #define    NULL    0       /* Null pointer for linked lists */
 #define    NULLCH '\0'     /* The null character            */
 
-
 /* Universal return constants */
 
 #define    OK            1         /* system call ok               */
@@ -30,6 +29,8 @@ typedef unsigned int size_t; /* Something that can hold the value of
 /* Functions defined by startup code */
 
 #define PROCESS_TABLE_SIZE 32
+
+#define MAX_SIGNALS 32
 
 #define PRIORITY_SIZE 4
 
@@ -66,7 +67,11 @@ typedef enum {
   TIMER_INT,
   SEND,
   RECEIVE,
-  SLEEP
+  SLEEP,
+  SIGNAL_HANDLER,
+  SIGNAL_RETURN,
+  SIGNAL_KILL,
+  SIGNAL_WAIT
 } REQUEST_TYPE;
 
 typedef enum {
@@ -75,6 +80,14 @@ typedef enum {
   LOW_MEDIUM_PRIORITY,
   LOW_PRIORITY
 } PRIORITY_LEVEL;
+
+typedef void (*signalHandler)(void *);
+
+typedef enum {
+  SIGNAL_IGNORE,
+  SIGNAL_CORE,
+  SIGNAL_EXIT
+} SIGNAL_ACTION;
 
 typedef struct PCB {
   PID_t pid;
@@ -90,7 +103,19 @@ typedef struct PCB {
   char* memoryEnd; // The end of the memory space that the process should be able to access.
   struct PCB *next;
   struct PCB *senders;
+  struct PCB *waitingProcess;
+  signalHandler signalTable[MAX_SIGNALS];
+  unsigned int signalMask; // bitmask to represent the 32 possible pending signals
 } PCB;
+
+typedef struct signal_context {
+  unsigned long return_address;
+  signalHandler handler;
+  unsigned long old_esp;
+  int return_value; // the return value of the process when the signal went off
+  int signalNum;
+  context_frame sigreturn_context; // the new context that will be popped into the process's registers once switch from kernel -> process
+} signal_context; 
 
 PCB *readyQueue[PRIORITY_SIZE];
 PCB *stoppedQueue;
@@ -151,7 +176,7 @@ PID_t sysgetpid(void);
 
 void sysputs(char* str);
 
-int syskill(PID_t pid);
+int syskill(PID_t PID, int signalNumber);
 
 int syssetprio(int priority);
 
@@ -160,6 +185,16 @@ int syssend(PID_t dest_pid, unsigned long num);
 int sysrecv(PID_t *from_pid, unsigned int * num);
 
 unsigned int syssleep( unsigned int milliseconds );
+
+int syssighandler(int signal, signalHandler newHandler, signalHandler *oldHandler);
+
+void syssigreturn(void *old_sp);
+
+int syswait(PID_t PID);
+
+void sigtramp(void (*handler)(void *), void *cntx);
+
+void signal(PCB *pcb, int signalNum);
 
 void root( void );
 
@@ -186,6 +221,12 @@ PCB *findReadyProcess(PID_t pid);
 void tick(void);
 
 void sleep(PCB *process);
+
+void addTrampolineContext(PCB *pcb, int signalNum);
+
+void deliverSignals(PCB *pcb);
+
+unsigned int pow(int x,int n);
 
 /* Anything you add must be between the #define and this comment */
 #endif

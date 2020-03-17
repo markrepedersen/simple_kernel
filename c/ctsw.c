@@ -27,6 +27,8 @@ void initEvec() {
 int contextswitch(PCB *p) {
 	ESP = (unsigned long*) p->esp;
 	rc = p->ret;
+	kprintf("%d\n", p->esp);
+
 	__asm __volatile (
         "pushf;" /* store flags */
         "pusha;" /* store all registers */

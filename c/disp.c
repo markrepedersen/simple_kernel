@@ -2,6 +2,8 @@
 #include <stdarg.h>
 #include <i386.h>
 
+extern char *maxaddr;        /* end of memory address range */
+
 PCB *nextHighestPriorityProcess(void) {
 	PCB *pop = NULL;
 	for (int i = 0; i < sizeof(readyQueue) / sizeof(readyQueue[0]); ++i) {
@@ -14,7 +16,17 @@ PCB *nextHighestPriorityProcess(void) {
 	return pop;
 }
 
-
+/**
+* Cleans up the signal handlers for the process when it has finished.
+* When reused, other processes will have different signal handlers.
+*/
+void clearSignalTable(PCB *pcb) {
+	signalHandler *signalTable = pcb->signalTable;
+	for (int i = 0; i < sizeof(signalTable) / sizeof(signalTable); ++i) {
+		signalTable[i] = NULL;
+	}
+	pcb->signalMask = 0;
+}
 
 /**
 * Cleans up a process by freeing its allocated stack and putting the process on the stopped queue.
@@ -37,12 +49,18 @@ void cleanup(PCB *pcb) {
 		curr = next;
 	}
 	pcb->senders = NULL;
-
+	clearSignalTable(pcb);
 	removeFromQueue(pcb, &(readyQueue[pcb->priority]));
 	kfree((void*) pcb->originalSp); // we don't know esp is pointing to the low address of stack; it might've been incremented since being allocated
 	pcb->esp = NULL;
 	pcb->pid += PROCESS_TABLE_SIZE;
 	addToBack(pcb, &stoppedQueue);
+
+	PCB *waitingProcess = pcb->waitingProcess;
+	if (waitingProcess) { // syswait
+		ready(waitingProcess);
+		waitingProcess = NULL;
+	}
 }
 
 /**
@@ -50,9 +68,14 @@ void cleanup(PCB *pcb) {
 * If none exist, then run the idle process.
 */
 PCB *next(void) {
-	PCB *pop = nextHighestPriorityProcess();
-	initPIT(TIME_SLICE * 10);
-	return pop != NULL ? pop : idleProcess;
+	PCB *nextProcess = nextHighestPriorityProcess();
+	if (nextProcess) {
+		initPIT(1000 * 10);
+		if (nextProcess->signalMask) { // process has a pending signal
+			deliverSignals(nextProcess);
+		}
+	}
+	return nextProcess ? nextProcess : idleProcess; // next process is the idle process if no other process to run
 }
 
 /**
@@ -99,7 +122,6 @@ void addToBack(PCB* pcb, PCB** queue) {
 			}
 			curr = curr->next;
 		}
-
 	}
 }
 
@@ -123,11 +145,25 @@ PCB *findReadyProcess(PID_t pid) {
 	return NULL;
 }
 
+/**
+* Looks for the process with the given pid in the given queue.
+*/
 PCB *findProcess(PID_t pid, PCB* queue) {
-	PCB* curr = queue;
+	PCB *curr = queue;
 	while (curr) {
 		if (curr->pid == pid) return curr;
 		curr = curr->next;
+	}
+	return NULL;
+}
+
+/**
+* Finds a process if it is not stopped and not the idle process.
+*/
+PCB *findExistingProcess(PID_t pid) {
+	PCB *process = findProcess(pid, stoppedQueue);
+	if (!process) { // process is not in stopped queue
+		return &processTable[(pid % 32) - 1];
 	}
 	return NULL;
 }
@@ -141,7 +177,7 @@ void dispatch() {
 		switch(call) {
 			case CREATE: {
 				functionPointer func = va_arg(params, functionPointer);
-				int stackSize = (int) va_arg(params, int);
+				int stackSize = va_arg(params, int);
 				process->ret = create(func, stackSize);
 				break;
 			}
@@ -162,23 +198,6 @@ void dispatch() {
 			case PUT_STRING: {
 				char* str = va_arg(params, char*);
 				kprintf(str);
-				break;
-			}
-			case KILL: {
-				PID_t pid = va_arg(params, PID_t);
-				if (pid == process->pid) {
-					cleanup(process);
-					process = next();
-				} else {
-					PCB* targetProcess = findReadyProcess(pid);
-					if (!targetProcess) {
-						process->ret = -1;
-						kprintf("Process with id %d not found.\n", pid);
-					} else {
-						process->ret = 0;
-						cleanup(targetProcess);
-					}
-				}
 				break;
 			}
 			case PRIORITY: {
@@ -213,14 +232,74 @@ void dispatch() {
 				break;
 			}
 			case SLEEP: {
-				// kprintf("start of sleep\n");
 				int ticks = va_arg(params, int);
 				process->timeSlice = ticks;
 				sleep(process);
-				// kprintf("middle\n");
 				process = next();
-				process->ret = 0; // the amount of time the sleep has left once unblocked. In this assignment it returns 0 always.
-				// kprintf("end of sleep\n");
+				break;
+			}
+			case SIGNAL_HANDLER: {
+					int signal = va_arg(params, int);
+					signalHandler newHandler = va_arg(params, signalHandler);
+					signalHandler *oldHandler = (signalHandler*) va_arg(params, signalHandler);
+
+					if (signal < 0 || signal >= MAX_SIGNALS-1) {
+						kprintf("Invalid signal.\n");
+						process->ret = -1;
+					} 
+					else if (((unsigned long) newHandler >= HOLESTART && (unsigned long) newHandler <= HOLEEND) || (unsigned long) newHandler > (unsigned long) maxaddr || (unsigned long) newHandler < 0) { // invalid address for handler
+						kprintf("New handler address is out of memory bounds.\n");
+						process->ret = -2;
+					}
+					else if (((unsigned long) oldHandler >= HOLESTART && (unsigned long) oldHandler <= HOLEEND) || (unsigned long) oldHandler > (unsigned long) maxaddr || (unsigned long) oldHandler < 0) { // invalid address for handler
+						kprintf("Old handler address is out of memory bounds.\n");
+						process->ret = -3;
+					}
+					else if (!newHandler) {
+						kprintf("New handler is NULL. Ignoring signal.\n");
+						process->ret = 0;
+					}
+					else {
+						kprintf("Setting signal handler for signal %d.\n", signal);
+						*oldHandler = process->signalTable[signal]; // give back old handler to application
+						process->signalTable[signal] = newHandler;
+						process->ret = 0;
+					}
+					break;
+			}
+			case SIGNAL_RETURN: {
+				unsigned long oldSP = va_arg(params, unsigned long);
+				process->esp = (unsigned long) oldSP;
+				signal_context *savedContext = (signal_context*) (oldSP - sizeof(signal_context));
+				process->ret = savedContext->return_value;
+				process->signalMask ^= 1UL << savedContext->signalNum;
+				break;
+			}
+			case SIGNAL_WAIT: {
+				PID_t pid = va_arg(params, PID_t);
+				PCB *foundProcess = findProcess(pid, stoppedQueue);
+				if (!foundProcess || pid == process->pid) {
+					process->ret = -1;
+				} else foundProcess->waitingProcess = process;
+				break;
+			}
+			case SIGNAL_KILL: {
+				PID_t pid = va_arg(params, PID_t);
+				int signalNumber = va_arg(params, int);
+				PCB *targetProcess = findExistingProcess(pid);
+
+				if (!targetProcess) {
+					kprintf("A signal was raised for process %d, but this process does not exist.\n", pid);
+					process->ret = -514;
+				}
+				else if (signalNumber < 0 || signalNumber >= MAX_SIGNALS-1) {
+					kprintf("Signal for process: %d is invalid.\n", pid);
+					process->ret = -583;
+				}
+				else {
+					signal(targetProcess, signalNumber);
+					process->ret = 0;
+				}
 				break;
 			}
 			default: {

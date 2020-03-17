@@ -1,6 +1,10 @@
 #include <xeroskernel.h>
 #include <stdarg.h>
 
+#define SYSKILL_SIGNAL 31
+#define LOW_SIGNAL_LIMIT 0
+#define HIGH_SIGNAL_LIMIT 31
+
 int syscall(int call, ...) {
 	va_list args;
 	va_start(args, call);
@@ -38,10 +42,6 @@ void sysputs(char* str) {
 	syscall(PUT_STRING, str);
 }
 
-int syskill(PID_t pid) {
-	return syscall(KILL, pid);
-}
-
 int syssetprio(int priority) {
 	return syscall(PRIORITY, priority);
 }
@@ -57,4 +57,20 @@ int sysrecv(PID_t *from_pid, unsigned int *num) {
 unsigned int syssleep( unsigned int milliseconds ) {
 	int ticks = milliseconds / TIME_SLICE;
 	return syscall(SLEEP, ticks);
+}
+
+int syssighandler(int signal, signalHandler newHandler, signalHandler *oldHandler) {
+	return syscall(SIGNAL_HANDLER, signal, newHandler, oldHandler);
+}
+
+void syssigreturn(void *oldSP) {
+	syscall(SIGNAL_RETURN, oldSP);
+}
+
+int syswait(PID_t PID) {
+	return syscall(SIGNAL_WAIT, PID);
+}
+
+int syskill(PID_t PID, int signalNumber) {
+	return syscall(SIGNAL_KILL, PID, signalNumber);
 }
